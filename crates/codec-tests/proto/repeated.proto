@@ -1,0 +1,30 @@
+// Repeated fields of every element shape: messages, strings, bytes, varints (including
+// zig-zag and bool), and both fixed widths. Tests encode these by hand so they can place
+// elements non-contiguously and split packed runs, layouts real encoders rarely emit.
+syntax = "proto3";
+
+package fixtures.repeated;
+
+message Item {
+    uint32 id = 1;
+    string name = 2;
+}
+
+message Collection {
+    uint64 slot = 1;
+    repeated Item items = 2;
+    repeated string tags = 3;
+    repeated bytes blobs = 4;
+    repeated uint32 counts = 5;
+    repeated sint64 deltas = 6;
+    repeated bool flags = 7;
+    repeated fixed64 stamps = 8;
+    repeated sfixed32 offsets = 9;
+    repeated float weights = 10;
+    string note = 11;
+}
+
+// Recursive through a repeated field, to exercise validation depth.
+message Tree {
+    repeated Tree children = 1;
+}

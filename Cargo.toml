@@ -1,0 +1,13 @@
+[workspace]
+resolver = "2"
+members = ["crates/*"]
+
+[workspace.package]
+edition = "2024"
+
+[workspace.dependencies]
+proto-codec = { path = "crates/proto-codec" }
+proto-codec-gen = { path = "crates/proto-codec-gen" }
+prost = "0.14.4"
+prost-types = "0.14.4"
+protox = "0.9.1"
