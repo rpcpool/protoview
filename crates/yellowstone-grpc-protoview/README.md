@@ -40,6 +40,10 @@ while let Some(update) = subscription.updates.next().await {
 `Bytes` of each update instead, and `subscription.requests` sends further requests (ping
 replies, changed filters) on the same stream.
 
+`GeyserStream` yields `SubscribeUpdate<Bytes>`, and `Bytes` implements `protoview::SharedBytes`, so
+`update.update_oneof_owned()` gives a detached `Transaction`, `Account`, ... view that can move to
+another thread without keeping the update alive. `update.into_inner()` returns the `Bytes`.
+
 The `protoview` runtime is re-exported as `yellowstone_grpc_protoview::protoview`.
 
 ## `protoview-client`

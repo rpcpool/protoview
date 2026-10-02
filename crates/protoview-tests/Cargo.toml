@@ -11,6 +11,7 @@ publish = false
 protoview = { workspace = true }
 
 [dev-dependencies]
+protoview = { workspace = true, features = ["bytes"] }
 bytes = { workspace = true }
 prost = { workspace = true }
 yellowstone-grpc-proto = { workspace = true }

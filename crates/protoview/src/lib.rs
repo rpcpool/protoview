@@ -13,10 +13,12 @@
 pub mod error;
 pub mod map;
 pub mod repeated;
+pub mod shared;
 pub mod varint;
 pub mod wire;
 
 pub use error::{DecodeError, MAX_DEPTH, MAX_MESSAGE_LEN};
+pub use shared::SharedBytes;
 pub use wire::{Field, Scanner, WireType};
 
 #[cfg(test)]

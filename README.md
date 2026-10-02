@@ -24,7 +24,8 @@ the same schema.
 | Crate | Role |
 | --- | --- |
 | [`protoview-build`](crates/protoview-build) | Build-time generator. Use it from `build.rs`. |
-| [`protoview`](crates/protoview) | Runtime the generated code calls into. `no_std`, no dependencies. |
+| [`protoview`](crates/protoview) | Runtime the generated code calls into. `no_std`, no dependencies (the optional `bytes` feature adds `SharedBytes` for `bytes::Bytes`). |
+| [`yellowstone-grpc-protoview`](crates/yellowstone-grpc-protoview) | Ready-made views for the Yellowstone gRPC schema, a raw-bytes tonic codec and a `GeyserClient`. |
 
 The other crates in the workspace are tests and a benchmark tool; see [Development](#development).
 
@@ -203,7 +204,21 @@ let owned = Order::parse(bytes)?;                 // Order<Vec<u8>>, movable, 's
 let shared = Order::parse(frame)?;                // Order<bytes::Bytes>, zero-copy from the network
 ```
 
-Nested views returned by getters always borrow from their parent (`LineItem<&[u8]>`).
+Nested views returned by getters borrow from their parent (`LineItem<&[u8]>`). If the buffer
+implements `protoview::SharedBytes` (`&[u8]`, and `bytes::Bytes` with the `bytes` feature on
+`protoview`), each nested message field also gets an `*_owned` getter returning a view that
+owns a slice of the same buffer, so it can outlive the parent and cross threads:
+
+```rust
+let order = Order::parse(frame)?;                          // Order<bytes::Bytes>
+let items: Vec<LineItem<Bytes>> = order.items_owned().collect();   // 'static, no copy
+std::thread::spawn(move || { /* use items */ });
+```
+
+`oneof`s with a member that borrows from the buffer get an `*_owned` getter returning a
+companion `...Owned<B>` enum (a `string` or `bytes` member is the raw `B`, not UTF-8 checked).
+Map fields have no owned form. `into_inner()` on any view gives its buffer back: the exact
+buffer passed to `parse` for a root view, that message's own bytes for a nested one.
 
 ## What gets generated
 
@@ -224,6 +239,9 @@ For a message `Order`, the generator emits `pub struct Order<B: AsRef<[u8]>>` wi
 | `repeated T xs` | `impl Iterator<Item = T>`, in wire order |
 | `map<K, V> m` | `impl Iterator<Item = (K, V)>`, in wire order |
 | `oneof delivery { … }` | `Option<order::Delivery<'_>>`, an enum with one variant per member |
+
+Every view also has `into_inner(self) -> B`, and, when `B: SharedBytes`, `*_owned` variants of
+the message and `oneof` getters (see [Buffers](#buffers)).
 
 Proto enums become Rust enums deriving `Debug, Clone, Copy, PartialEq, Eq, Hash`, with
 `from_i32`, `to_i32`, `as_str_name`, and a `Default` of the variant for `0`. Variant names follow `prost`, including its
@@ -293,7 +311,8 @@ matches no field, names a non-`bytes` field or a map, or has a zero length fails
 - **proto3.** Groups are rejected; proto2 extensions and default values are not handled.
 - **Views borrow their parent.** A nested view borrows the view it came from, not the
   underlying buffer, so walking down a tree in a loop that drops each parent does not
-  borrow-check; recurse instead.
+  borrow-check; recurse instead. With a `SharedBytes` buffer, the `*_owned` getters
+  give detached views instead.
 - View structs and oneof enums derive no traits (`Debug`, `Clone`).
 - `fixed_bytes` does not apply to map values.
 

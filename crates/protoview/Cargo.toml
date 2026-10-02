@@ -7,4 +7,9 @@ license.workspace = true
 readme.workspace = true
 description = "Runtime for protoview-build: zero-copy, allocation-free protobuf view types"
 
+[features]
+# `SharedBytes` for `bytes::Bytes`.
+bytes = ["dep:bytes"]
+
 [dependencies]
+bytes = { workspace = true, optional = true }

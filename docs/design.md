@@ -73,15 +73,25 @@ manufacture a sub-`B`, so they borrow from the parent:
 fn account(&self) -> Option<SubscribeUpdateAccount<&'_ [u8]>>
 ```
 
+`into_inner(self) -> B` gives the container back (for a root view, the exact buffer passed to
+`parse`, uncopied; for a nested view, that message's sub-slice).
+
 **Known trade:** nested views cannot detach from the parent buffer, so fanning a
 block's transactions out to worker threads needs the root kept alive (e.g. behind an
-`Arc`) or a copy. Recoverable later without breakage by adding a second impl block
-gated on a sliceable trait — new methods, no change to the struct bound:
+`Arc`) or a copy. The escape hatch is a second impl block gated on `protoview::SharedBytes`
+(a buffer that can hand out an owned sub-buffer of itself: `&[u8]`, and `bytes::Bytes` with
+the runtime's `bytes` feature) — new methods, no change to the struct bound:
 
 ```rust
 impl<B: AsRef<[u8]>> SubscribeUpdate<B> { fn account(&self) -> Option<Account<&'_ [u8]>> }
-impl<B: ByteView>    SubscribeUpdate<B> { fn account_owned(&self) -> Option<Account<B>> }
+impl<B: SharedBytes>  SubscribeUpdate<B> { fn account_owned(&self) -> Option<Account<B>> }
 ```
+
+`*_owned` getters exist for message fields (singular and repeated) and for `oneof`s with a
+member that borrows from the buffer; the latter return a companion `...Owned<B>` enum
+(message members are views over `B`; `string` and `bytes` members are a `B` holding the raw
+payload, so a string is not UTF-8 checked). Maps are not covered. `Vec<u8>` cannot implement
+`SharedBytes` without copying.
 
 Rejected: `bytes::Buf`. It is a sequential cursor — getters would need `&mut self`,
 `chunk()` may return a partial slice for `Chain`/`VecDeque<Bytes>`, and there is no
