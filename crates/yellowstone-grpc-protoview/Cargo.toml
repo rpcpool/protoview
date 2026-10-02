@@ -1,0 +1,45 @@
+[package]
+name = "yellowstone-grpc-protoview"
+version = "0.1.0"
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+readme = "README.md"
+description = "Zero-copy protoview views of the Yellowstone gRPC geyser schema, plus a tonic codec that yields raw message bytes"
+
+[features]
+default = ["client"]
+# `GeyserClient` and the transport it needs. Disable for just the views and the codec.
+client = [
+    "tonic/channel",
+    "tonic/codegen",
+    "tonic/tls-ring",
+    "tonic/tls-native-roots",
+    "tonic/tls-webpki-roots",
+    "dep:thiserror",
+    "dep:tokio",
+    "dep:tokio-stream",
+]
+# The `protoview-client` binary.
+cli = ["client", "dep:bs58", "dep:clap", "dep:dotenvy"]
+
+[[bin]]
+name = "protoview-client"
+path = "src/bin/protoview-client.rs"
+required-features = ["cli"]
+
+[dependencies]
+bs58 = { version = "0.5", optional = true }
+bytes = { workspace = true }
+clap = { workspace = true, optional = true }
+dotenvy = { workspace = true, optional = true }
+prost = { workspace = true }
+protoview = { workspace = true }
+thiserror = { workspace = true, optional = true }
+tokio = { workspace = true, optional = true }
+tokio-stream = { workspace = true, optional = true }
+tonic = { version = "0.14.6", default-features = false }
+yellowstone-grpc-proto = { workspace = true }
+
+[build-dependencies]
+protoview-build = { workspace = true }

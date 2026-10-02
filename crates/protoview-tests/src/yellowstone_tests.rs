@@ -1,5 +1,5 @@
 //! Messages encoded by `yellowstone-grpc-proto` 13.0.0's `prost` types, decoded by the
-//! views generated from verbatim copies of its protos in `proto/yellowstone/`.
+//! views generated from verbatim copies of its protos in `crates/yellowstone-grpc-protoview/proto/`.
 //!
 //! Every check destructures the yellowstone struct exhaustively, so a field that is not
 //! asserted is a compile error rather than a silent gap.

@@ -302,6 +302,7 @@ matches no field, names a non-`bytes` field or a map, or has a zero length fails
 | Path | Contents |
 | --- | --- |
 | `crates/protoview-tests` | Generates code from the fixtures in `crates/protoview-tests/proto/` and tests it, mostly against `prost` as a reference encoder. |
+| [`crates/yellowstone-grpc-protoview`](crates/yellowstone-grpc-protoview) | Ready-made views for the Yellowstone gRPC schema plus a raw-bytes tonic codec, for reuse. |
 | `crates/geyser-index-bench` | A CLI that benchmarks view indexing against `prost` on a live Yellowstone gRPC stream. |
 | `docs/design.md` | Design decisions and the reasons behind them. |
 | `AGENTS.md` | Conventions and gotchas for contributors, human or not. |

@@ -8,8 +8,8 @@ use prost::Message as _;
 use protoview::DecodeError;
 use yellowstone_grpc_proto::geyser as ys;
 
-use crate::view::geyser::SubscribeUpdate;
-use crate::view::geyser::subscribe_update::UpdateOneof;
+use yellowstone_grpc_protoview::geyser::SubscribeUpdate;
+use yellowstone_grpc_protoview::geyser::subscribe_update::UpdateOneof;
 
 /// Which member of `SubscribeUpdate`'s `update_oneof` an update carries.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

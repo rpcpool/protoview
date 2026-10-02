@@ -5,14 +5,9 @@
 //! Reads `GRPC_ENDPOINT` (required) and `X_TOKEN` (optional) from the environment, after
 //! loading a dotenv file (`.env` by default) if one exists.
 
-mod client;
-mod codec;
-// Generated API: the binary uses only the getters it needs to classify updates.
 mod measure;
 mod request;
 mod stats;
-#[allow(dead_code)]
-mod view;
 
 use std::env;
 use std::future;
@@ -23,8 +18,8 @@ use std::time::{Duration, Instant};
 use clap::Parser;
 use thiserror::Error;
 use tokio::time::MissedTickBehavior;
+use yellowstone_grpc_protoview::client::{ClientConfig, ClientError, GeyserClient, Subscription};
 
-use crate::client::{ClientConfig, ClientError, Subscription};
 use crate::measure::{Timer, UpdateKind};
 use crate::request::Stream;
 use crate::stats::Stats;
@@ -191,7 +186,10 @@ async fn run(cli: Cli) -> Result<(), AppError> {
     let Subscription {
         requests,
         mut updates,
-    } = client::subscribe(&config, request).await?;
+    } = GeyserClient::connect(&config)
+        .await?
+        .subscribe_raw(request)
+        .await?;
     let started = Instant::now();
     let mut stats = Stats::new(timer.compares_prost());
 
