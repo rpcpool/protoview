@@ -2,8 +2,8 @@
 //!
 //! See `docs/design.md` in the repository root for the full design. This is an early
 //! slice: [`Config::compile`] handles scalar fields and nested messages — singular,
-//! proto3 `optional` or `repeated` — only; `map`, `oneof`, and `enum` fields are rejected
-//! with [`Error::UnsupportedField`] until later phases land.
+//! proto3 `optional`, `repeated`, or `oneof` members — only; `map` and `enum` fields are
+//! rejected with [`Error::UnsupportedField`] until later phases land.
 
 mod codegen;
 mod error;
@@ -47,9 +47,26 @@ impl Config {
         self
     }
 
-    /// Compiles `files` (and everything they transitively import) into a single
-    /// generated Rust source file, `proto_codec_gen.rs`, under the configured output
-    /// directory.
+    /// Compiles `files` (and everything they transitively import) into one Rust source
+    /// file per proto package under the configured output directory, named as
+    /// `prost-build` names them: `solana.storage.ConfirmedBlock` becomes
+    /// `solana.storage.confirmed_block.rs`, and a file without a `package` becomes `_.rs`.
+    ///
+    /// Each file holds only its package's items. Cross-package references are
+    /// `super::`-relative, so include each file inside modules mirroring its package:
+    ///
+    /// ```ignore
+    /// pub mod geyser {
+    ///     include!(concat!(env!("OUT_DIR"), "/geyser.rs"));
+    /// }
+    /// pub mod solana {
+    ///     pub mod storage {
+    ///         pub mod confirmed_block {
+    ///             include!(concat!(env!("OUT_DIR"), "/solana.storage.confirmed_block.rs"));
+    ///         }
+    ///     }
+    /// }
+    /// ```
     ///
     /// # Errors
     ///
@@ -61,17 +78,20 @@ impl Config {
     pub fn compile(self, files: &[impl AsRef<Path>]) -> Result<(), Error> {
         let descriptor_set = protox::compile(files, &self.includes)?;
         let model = Model::build(&descriptor_set)?;
-        let source = codegen::render(&model);
+        let files = codegen::render(&model);
 
         let out_dir = self
             .out_dir
             .or_else(|| env::var_os("OUT_DIR").map(PathBuf::from))
             .expect("Config::out_dir or $OUT_DIR must be set");
-        let out_path = out_dir.join("proto_codec_gen.rs");
-        fs::write(&out_path, source).map_err(|source| Error::Io {
-            path: out_path,
-            source,
-        })
+        for file in files {
+            let out_path = out_dir.join(&file.file_name);
+            fs::write(&out_path, file.source).map_err(|source| Error::Io {
+                path: out_path,
+                source,
+            })?;
+        }
+        Ok(())
     }
 }
 

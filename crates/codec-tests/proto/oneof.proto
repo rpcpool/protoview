@@ -1,0 +1,36 @@
+// Oneofs of every member shape, two oneofs in one message, an all-scalar oneof (whose
+// enum borrows nothing), plain and optional fields around them, and members that are
+// messages from this package and from another one.
+syntax = "proto3";
+
+package fixtures.oneof;
+
+import "nested.proto";
+
+message Item {
+    uint32 id = 1;
+}
+
+message Choice {
+    uint64 before = 1;
+
+    oneof value {
+        uint64 number = 2;
+        sint32 signed = 3;
+        double ratio = 4;
+        bool flag = 5;
+        string text = 6;
+        bytes blob = 7;
+        Item item = 8;
+        fixtures.nested.Inner foreign = 9;
+    }
+
+    optional uint32 maybe = 10;
+
+    oneof mode {
+        fixed32 fast = 11;
+        int64 slow = 12;
+    }
+
+    string after = 13;
+}

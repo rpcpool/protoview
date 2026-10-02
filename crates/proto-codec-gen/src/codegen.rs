@@ -1,89 +1,142 @@
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
 
-use crate::model::{Field, FieldKind, Message, Model, Scalar};
-use crate::naming::escape_ident;
+use crate::model::{Field, FieldKind, Message, Model, Oneof, Scalar, TypeRef};
+use crate::naming::{escape_ident, snake_case, upper_camel};
 
-/// Renders a [`Model`] into a single Rust source string, with `pub mod` nesting
-/// matching each message's proto package.
-pub fn render(model: &Model) -> String {
-    let mut root = ModuleNode::default();
+/// One generated source file: the code for every message in a single proto package.
+pub struct PackageFile {
+    /// File name, following `prost-build`: the package's Rust module segments joined by
+    /// `.`, plus `.rs` — or `_.rs` for files without a `package`.
+    pub file_name: String,
+    pub source: String,
+}
+
+/// Renders a [`Model`] into one Rust source file per proto package, in package order.
+///
+/// Files carry no `mod` wrappers: the includer nests each `include!` in modules that
+/// mirror the package hierarchy, which is what the `super::`-relative paths emitted for
+/// cross-package references assume.
+pub fn render(model: &Model) -> Vec<PackageFile> {
+    let mut packages: BTreeMap<&[String], Vec<&Message>> = BTreeMap::new();
     for message in &model.messages {
-        root.insert(&message.module, message);
+        packages.entry(&message.module).or_default().push(message);
     }
 
-    let mut out = String::new();
-    root.render(&mut out, 0);
-    out
+    packages
+        .into_iter()
+        .map(|(module, messages)| {
+            let mut source = String::new();
+            for message in messages {
+                render_message(&mut source, message);
+            }
+            PackageFile {
+                file_name: file_name(module),
+                source,
+            }
+        })
+        .collect()
 }
 
-#[derive(Default)]
-struct ModuleNode<'a> {
-    children: BTreeMap<String, ModuleNode<'a>>,
-    messages: Vec<&'a Message>,
-}
-
-impl<'a> ModuleNode<'a> {
-    fn insert(&mut self, path: &[String], message: &'a Message) {
-        match path.split_first() {
-            None => self.messages.push(message),
-            Some((head, rest)) => self.children.entry(head.clone()).or_default().insert(rest, message),
-        }
-    }
-
-    fn render(&self, out: &mut String, indent: usize) {
-        for message in &self.messages {
-            render_message(out, indent, message);
-        }
-        for (name, child) in &self.children {
-            let pad = "    ".repeat(indent);
-            let _ = writeln!(out, "{pad}pub mod {name} {{");
-            child.render(out, indent + 1);
-            let _ = writeln!(out, "{pad}}}");
-        }
+fn file_name(module: &[String]) -> String {
+    if module.is_empty() {
+        "_.rs".to_string()
+    } else {
+        format!("{}.rs", module.join("."))
     }
 }
 
-fn render_message(out: &mut String, indent: usize, message: &Message) {
-    let pad = "    ".repeat(indent);
-    let inner = "    ".repeat(indent + 1);
+/// Renders the path to `target` as seen from code in package module `from`, the way
+/// `prost` does: a bare name within the same package, otherwise `super::` up to the
+/// common ancestor and back down, e.g. `super::solana::storage::confirmed_block::Tx`.
+fn relative_path(from: &[String], target: &TypeRef) -> String {
+    let common = from
+        .iter()
+        .zip(&target.module)
+        .take_while(|(a, b)| a == b)
+        .count();
+    let mut path: Vec<&str> = vec!["super"; from.len() - common];
+    path.extend(target.module[common..].iter().map(String::as_str));
+    path.push(&target.rust_name);
+    path.join("::")
+}
+
+fn render_message(out: &mut String, message: &Message) {
+    let pad = "";
+    let inner = "    ";
+    let module = message.module.as_slice();
     let name = &message.rust_name;
-    let (slots, slot_count) = index_slots(message);
+    let layout = IndexLayout::of(message);
+    let slot_count = layout.slot_count;
 
+    if !has_indexed_fields(message) {
+        // No getters read the buffer or index of a field-less message.
+        let _ = writeln!(out, "{pad}#[allow(dead_code)]");
+    }
     let _ = writeln!(out, "{pad}pub struct {name}<B: AsRef<[u8]>> {{");
     let _ = writeln!(out, "{inner}buf: B,");
     let _ = writeln!(out, "{inner}index: [u32; {slot_count}],");
     let _ = writeln!(out, "{pad}}}");
     let _ = writeln!(out, "{pad}impl<B: AsRef<[u8]>> {name}<B> {{");
 
-    render_parse(out, &inner, message, &slots, slot_count);
-    for (field, &slot) in message.fields.iter().zip(&slots) {
-        render_getter(out, &inner, slot, field);
+    render_parse(out, inner, message, &layout);
+    for (field, &slot) in message.fields.iter().zip(&layout.field_slots) {
+        render_getter(out, inner, module, slot, field);
+    }
+    for (oneof, &slot) in message.oneofs.iter().zip(&layout.oneof_slots) {
+        render_oneof_getter(out, inner, message, oneof, slot);
     }
 
     let _ = writeln!(out, "{pad}}}");
+
+    if !message.oneofs.is_empty() {
+        render_oneof_module(out, message);
+    }
 }
 
-/// Assigns each field its first slot in the index table. A singular field takes one slot
-/// holding its payload offset (last occurrence wins); a repeated field takes two, holding
-/// the tag offset of its first element and the offset just past its last, so iteration
-/// re-walks only that span. Returns the per-field slots and the table length.
-fn index_slots(message: &Message) -> (Vec<usize>, usize) {
-    let mut next = 0;
-    let slots = message
-        .fields
-        .iter()
-        .map(|field| {
+/// Whether `message` has anything to index: a field outside or inside a `oneof`.
+fn has_indexed_fields(message: &Message) -> bool {
+    !message.fields.is_empty() || !message.oneofs.is_empty()
+}
+
+/// Where each field and `oneof` lives in a message's index table.
+///
+/// - A singular field takes one slot holding its payload offset (last occurrence wins).
+/// - A repeated field takes two, holding the tag offset of its first element and the
+///   offset just past its last, so iteration re-walks only that span.
+/// - A `oneof` takes two, holding the payload offset of the member seen last and that
+///   member's field number, which is how last-wins applies across members.
+struct IndexLayout {
+    field_slots: Vec<usize>,
+    oneof_slots: Vec<usize>,
+    slot_count: usize,
+}
+
+impl IndexLayout {
+    fn of(message: &Message) -> Self {
+        let mut next = 0;
+        let mut take = |width| {
             let slot = next;
-            next += if field.repeated { 2 } else { 1 };
+            next += width;
             slot
-        })
-        .collect();
-    (slots, next)
+        };
+        let field_slots = message
+            .fields
+            .iter()
+            .map(|field| take(if field.repeated { 2 } else { 1 }))
+            .collect();
+        let oneof_slots = message.oneofs.iter().map(|_| take(2)).collect();
+        Self {
+            field_slots,
+            oneof_slots,
+            slot_count: next,
+        }
+    }
 }
 
-fn render_parse(out: &mut String, pad: &str, message: &Message, slots: &[usize], slot_count: usize) {
+fn render_parse(out: &mut String, pad: &str, message: &Message, layout: &IndexLayout) {
     let name = &message.rust_name;
+    let slot_count = layout.slot_count;
     let _ = writeln!(
         out,
         "{pad}/// Validates `buf` as a `{name}`, including every nested message, and indexes its\n\
@@ -125,11 +178,21 @@ fn render_parse(out: &mut String, pad: &str, message: &Message, slots: &[usize],
          {pad}#[allow(clippy::single_match)]\n\
          {pad}fn walk(buf: &[u8], depth: Option<u32>) -> Result<[u32; {slot_count}], proto_codec::DecodeError> {{"
     );
-    if message.fields.is_empty() {
+    let index_mut = if !has_indexed_fields(message) {
         let _ = writeln!(out, "{pad}    let _ = depth;");
-    }
-    let _ = writeln!(out, "{pad}    let mut index = [0u32; {slot_count}];");
+        ""
+    } else {
+        "mut "
+    };
+    let _ = writeln!(out, "{pad}    let {index_mut}index = [0u32; {slot_count}];");
     let _ = writeln!(out, "{pad}    let mut scanner = proto_codec::Scanner::new(buf)?;");
+    if !has_indexed_fields(message) {
+        // Nothing to index, but the walk still validates the message's structure.
+        let _ = writeln!(out, "{pad}    while scanner.next_field()?.is_some() {{}}");
+        let _ = writeln!(out, "{pad}    Ok(index)");
+        let _ = writeln!(out, "{pad}}}");
+        return;
+    }
     if message.fields.iter().any(|field| field.repeated) {
         let _ = writeln!(out, "{pad}    loop {{");
         let _ = writeln!(out, "{pad}        let tag = scanner.position() as u32;");
@@ -138,10 +201,10 @@ fn render_parse(out: &mut String, pad: &str, message: &Message, slots: &[usize],
         let _ = writeln!(out, "{pad}    while let Some(field) = scanner.next_field()? {{");
     }
     let _ = writeln!(out, "{pad}        match field.number {{");
-    for (field, &slot) in message.fields.iter().zip(slots) {
-        let arm = format!("{pad}                ");
+    let arm = format!("{pad}                ");
+    for (field, &slot) in message.fields.iter().zip(&layout.field_slots) {
         let _ = writeln!(out, "{pad}            {number} => {{", number = field.number);
-        render_field_validation(out, &arm, field);
+        render_field_validation(out, &arm, &message.module, field);
         if field.repeated {
             let end = slot + 1;
             let _ = writeln!(out, "{arm}if index[{end}] == 0 {{ index[{slot}] = tag; }}");
@@ -150,6 +213,17 @@ fn render_parse(out: &mut String, pad: &str, message: &Message, slots: &[usize],
             let _ = writeln!(out, "{arm}index[{slot}] = field.payload;");
         }
         let _ = writeln!(out, "{pad}            }}");
+    }
+    for (oneof, &slot) in message.oneofs.iter().zip(&layout.oneof_slots) {
+        let member_slot = slot + 1;
+        for member in &oneof.members {
+            let number = member.number;
+            let _ = writeln!(out, "{pad}            {number} => {{");
+            render_field_validation(out, &arm, &message.module, member);
+            let _ = writeln!(out, "{arm}index[{slot}] = field.payload;");
+            let _ = writeln!(out, "{arm}index[{member_slot}] = {number};");
+            let _ = writeln!(out, "{pad}            }}");
+        }
     }
     let _ = writeln!(out, "{pad}            _ => {{}}");
     let _ = writeln!(out, "{pad}        }}");
@@ -160,7 +234,7 @@ fn render_parse(out: &mut String, pad: &str, message: &Message, slots: &[usize],
 
 /// Renders the checks one occurrence of `field` must pass when the walk is validating: its
 /// wire type, the contents of a packed run, and, for a message, the nested message itself.
-fn render_field_validation(out: &mut String, pad: &str, field: &Field) {
+fn render_field_validation(out: &mut String, pad: &str, module: &[String], field: &Field) {
     let expect = |wire_type: &str| {
         format!("proto_codec::wire::expect_wire_type(&field, proto_codec::WireType::{wire_type})?;")
     };
@@ -180,7 +254,8 @@ fn render_field_validation(out: &mut String, pad: &str, field: &Field) {
             };
             let _ = writeln!(out, "{pad}if depth.is_some() {{ {check} }}");
         }
-        FieldKind::Message(rust_path) => {
+        FieldKind::Message(target) => {
+            let rust_path = relative_path(module, target);
             let _ = writeln!(out, "{pad}if let Some(depth) = depth {{");
             let _ = writeln!(out, "{pad}    {}", expect("LengthDelimited"));
             let _ = writeln!(
@@ -196,9 +271,9 @@ fn render_field_validation(out: &mut String, pad: &str, field: &Field) {
     }
 }
 
-fn render_getter(out: &mut String, pad: &str, slot: usize, field: &Field) {
+fn render_getter(out: &mut String, pad: &str, module: &[String], slot: usize, field: &Field) {
     if field.repeated {
-        render_repeated_getter(out, pad, slot, field);
+        render_repeated_getter(out, pad, module, slot, field);
         return;
     }
     let name = escape_ident(&field.name);
@@ -238,7 +313,8 @@ fn render_getter(out: &mut String, pad: &str, slot: usize, field: &Field) {
             let _ = writeln!(out, "{pad}    {}", present(&read_expr));
             let _ = writeln!(out, "{pad}}}");
         }
-        FieldKind::Message(rust_path) => {
+        FieldKind::Message(target) => {
+            let rust_path = relative_path(module, target);
             let _ = writeln!(
                 out,
                 "{pad}pub fn {name}(&self) -> Option<{rust_path}<&[u8]>> {{"
@@ -253,6 +329,112 @@ fn render_getter(out: &mut String, pad: &str, slot: usize, field: &Field) {
             let _ = writeln!(out, "{pad}}}");
         }
     }
+}
+
+/// Rust names for one `oneof`, as `prost` derives them: the enum lives in a module named
+/// after the message (`subscribe_update`) and is named after the `oneof`
+/// (`UpdateOneof`); each variant is named after its member field.
+struct OneofNames {
+    module: String,
+    enum_name: String,
+    /// Whether any variant borrows from the buffer, so the enum needs a lifetime.
+    borrows: bool,
+}
+
+impl OneofNames {
+    fn of(message: &Message, oneof: &Oneof) -> Self {
+        Self {
+            module: escape_ident(&snake_case(&message.rust_name)),
+            enum_name: upper_camel(&oneof.name),
+            borrows: oneof.members.iter().any(|member| {
+                matches!(
+                    member.kind,
+                    FieldKind::Message(_) | FieldKind::Scalar(Scalar::String | Scalar::Bytes)
+                )
+            }),
+        }
+    }
+
+    /// The enum's type as written from the message's own module, e.g.
+    /// `subscribe_update::UpdateOneof<'_>`.
+    fn type_from_parent(&self) -> String {
+        let lifetime = if self.borrows { "<'_>" } else { "" };
+        format!("{}::{}{lifetime}", self.module, self.enum_name)
+    }
+}
+
+/// Renders the getter for a `oneof`: the member seen last on the wire, or [`None`].
+fn render_oneof_getter(out: &mut String, pad: &str, message: &Message, oneof: &Oneof, slot: usize) {
+    let names = OneofNames::of(message, oneof);
+    let fn_name = escape_ident(&oneof.name);
+    let enum_path = format!("{}::{}", names.module, names.enum_name);
+    let member_slot = slot + 1;
+
+    let _ = writeln!(
+        out,
+        "{pad}/// The member of `{oneof_name}` that was set last on the wire, or `None` if none was.",
+        oneof_name = oneof.name
+    );
+    let _ = writeln!(out, "{pad}pub fn {fn_name}(&self) -> Option<{}> {{", names.type_from_parent());
+    let _ = writeln!(out, "{pad}    let offset = self.index[{slot}];");
+    let _ = writeln!(out, "{pad}    if offset == 0 {{ return None; }}");
+    let _ = writeln!(out, "{pad}    let offset = offset as usize;");
+    let _ = writeln!(out, "{pad}    match self.index[{member_slot}] {{");
+    for member in &oneof.members {
+        let variant = upper_camel(&member.name);
+        let number = member.number;
+        let read_ld = "proto_codec::wire::read_length_delimited(self.buf.as_ref(), offset)";
+        let value = match &member.kind {
+            FieldKind::Scalar(Scalar::String) => {
+                format!("core::str::from_utf8({read_ld}.unwrap_or(&[]))")
+            }
+            FieldKind::Scalar(Scalar::Bytes) => format!("{read_ld}.unwrap_or(&[])"),
+            FieldKind::Scalar(scalar) => scalar_read(*scalar).2,
+            FieldKind::Message(target) => format!(
+                "{}::from_validated({read_ld}.ok()?)",
+                relative_path(&message.module, target)
+            ),
+        };
+        let _ = writeln!(out, "{pad}        {number} => Some({enum_path}::{variant}({value})),");
+    }
+    let _ = writeln!(out, "{pad}        _ => None,");
+    let _ = writeln!(out, "{pad}    }}");
+    let _ = writeln!(out, "{pad}}}");
+}
+
+/// Renders the module holding `message`'s oneof enums.
+fn render_oneof_module(out: &mut String, message: &Message) {
+    let Some(first) = message.oneofs.first() else {
+        return;
+    };
+    let module_name = OneofNames::of(message, first).module;
+    let mut module = message.module.clone();
+    module.push(module_name.clone());
+
+    let _ = writeln!(out, "/// Oneof enums of [`{}`].", message.rust_name);
+    let _ = writeln!(out, "pub mod {module_name} {{");
+    for oneof in &message.oneofs {
+        let names = OneofNames::of(message, oneof);
+        let lifetime = if names.borrows { "<'a>" } else { "" };
+        let _ = writeln!(out, "    /// The members of `{}`.", oneof.name);
+        let _ = writeln!(out, "    pub enum {}{lifetime} {{", names.enum_name);
+        for member in &oneof.members {
+            let variant = upper_camel(&member.name);
+            let payload = match &member.kind {
+                FieldKind::Scalar(Scalar::String) => {
+                    "Result<&'a str, core::str::Utf8Error>".to_string()
+                }
+                FieldKind::Scalar(Scalar::Bytes) => "&'a [u8]".to_string(),
+                FieldKind::Scalar(scalar) => scalar_read(*scalar).0.to_string(),
+                FieldKind::Message(target) => {
+                    format!("{}<&'a [u8]>", relative_path(&module, target))
+                }
+            };
+            let _ = writeln!(out, "        {variant}({payload}),");
+        }
+        let _ = writeln!(out, "    }}");
+    }
+    let _ = writeln!(out, "}}");
 }
 
 /// Renders a getter returning the payload of a singular length-delimited field, as
@@ -273,7 +455,7 @@ fn render_bytes_getter(out: &mut String, pad: &str, fn_name: &str, ret: &str, of
 /// Renders the iterator getter(s) for a repeated field. Elements are yielded in wire
 /// order, including elements interleaved with other fields. `parse` has rejected records
 /// of the wrong wire type, so the filters below only guard the unvalidated path.
-fn render_repeated_getter(out: &mut String, pad: &str, slot: usize, field: &Field) {
+fn render_repeated_getter(out: &mut String, pad: &str, module: &[String], slot: usize, field: &Field) {
     let name = escape_ident(&field.name);
     let records = format!(
         "proto_codec::repeated::Records::new(self.buf.as_ref(), self.index[{slot}], self.index[{end}], {number})",
@@ -315,7 +497,8 @@ fn render_repeated_getter(out: &mut String, pad: &str, slot: usize, field: &Fiel
             }
             let _ = writeln!(out, "{pad}}}");
         }
-        FieldKind::Message(rust_path) => {
+        FieldKind::Message(target) => {
+            let rust_path = relative_path(module, target);
             let _ = writeln!(
                 out,
                 "{pad}pub fn {name}(&self) -> impl Iterator<Item = {rust_path}<&[u8]>> + '_ {{"
@@ -439,5 +622,60 @@ fn scalar_read(scalar: Scalar) -> (&'static str, &'static str, String) {
             ),
         ),
         Scalar::String | Scalar::Bytes => unreachable!("handled separately in render_getter"),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{file_name, relative_path};
+    use crate::model::TypeRef;
+
+    fn module(path: &str) -> Vec<String> {
+        path.split('.').filter(|s| !s.is_empty()).map(str::to_string).collect()
+    }
+
+    fn target(path: &str, name: &str) -> TypeRef {
+        TypeRef {
+            module: module(path),
+            rust_name: name.to_string(),
+        }
+    }
+
+    #[test]
+    fn same_package_is_a_bare_name() {
+        assert_eq!(relative_path(&module("geyser"), &target("geyser", "Ping")), "Ping");
+        assert_eq!(relative_path(&[], &target("", "Root")), "Root");
+    }
+
+    #[test]
+    fn cross_package_climbs_to_the_common_ancestor() {
+        assert_eq!(
+            relative_path(
+                &module("geyser"),
+                &target("solana.storage.confirmed_block", "Transaction")
+            ),
+            "super::solana::storage::confirmed_block::Transaction"
+        );
+        assert_eq!(
+            relative_path(&module("fixtures.a"), &target("fixtures.b", "X")),
+            "super::b::X"
+        );
+        assert_eq!(
+            relative_path(&module("a.b.c"), &target("a", "X")),
+            "super::super::X"
+        );
+        assert_eq!(relative_path(&module("a"), &target("a.b", "X")), "b::X");
+        assert_eq!(relative_path(&module("a"), &target("", "Root")), "super::Root");
+        assert_eq!(relative_path(&[], &target("a.b", "X")), "a::b::X");
+    }
+
+    #[test]
+    fn file_names_match_prost_build() {
+        assert_eq!(file_name(&module("geyser")), "geyser.rs");
+        assert_eq!(
+            file_name(&module("solana.storage.confirmed_block")),
+            "solana.storage.confirmed_block.rs"
+        );
+        assert_eq!(file_name(&[]), "_.rs");
     }
 }

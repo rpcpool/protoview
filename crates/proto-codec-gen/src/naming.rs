@@ -25,6 +25,33 @@ pub fn snake_case(name: &str) -> String {
     out
 }
 
+/// Converts a `snake_case` (or mixed) proto name into `UpperCamelCase`, as `prost` does
+/// for oneof enum and variant names: `update_oneof` -> `UpdateOneof`, `dataV2` -> `DataV2`.
+pub fn upper_camel(name: &str) -> String {
+    let mut out = String::with_capacity(name.len());
+    let mut word_start = true;
+    let mut prev_lower_or_digit = false;
+    for ch in name.chars() {
+        if ch == '_' {
+            word_start = true;
+            prev_lower_or_digit = false;
+            continue;
+        }
+        // A lower-to-upper transition starts a new word, as in `dataV2`.
+        if ch.is_uppercase() && prev_lower_or_digit {
+            word_start = true;
+        }
+        if word_start {
+            out.extend(ch.to_uppercase());
+        } else {
+            out.extend(ch.to_lowercase());
+        }
+        word_start = false;
+        prev_lower_or_digit = ch.is_lowercase() || ch.is_ascii_digit();
+    }
+    out
+}
+
 /// Converts a `package.segment` path into Rust module segments.
 pub fn module_path(package: &str) -> Vec<String> {
     package
@@ -49,5 +76,26 @@ pub fn escape_ident(name: &str) -> String {
         format!("r#{name}")
     } else {
         name.to_string()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{snake_case, upper_camel};
+
+    #[test]
+    fn upper_camel_matches_prost() {
+        assert_eq!(upper_camel("update_oneof"), "UpdateOneof");
+        assert_eq!(upper_camel("transaction_status"), "TransactionStatus");
+        assert_eq!(upper_camel("data"), "Data");
+        assert_eq!(upper_camel("dataV2"), "DataV2");
+        assert_eq!(upper_camel("SLOT_STATUS"), "SlotStatus");
+        assert_eq!(upper_camel("field1_x"), "Field1X");
+    }
+
+    #[test]
+    fn snake_case_matches_prost() {
+        assert_eq!(snake_case("SubscribeUpdate"), "subscribe_update");
+        assert_eq!(snake_case("ConfirmedBlock"), "confirmed_block");
     }
 }

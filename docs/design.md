@@ -124,6 +124,9 @@ Populating it during the walk:
   fields, unknown fields): repeated fields may legally appear non-contiguously on the
   wire. Absence is keyed off the end slot, since a start offset of `0` is legal.
   Numeric fields merge packed runs and unpacked values, in any mix, into one stream.
+- **Oneofs: two slots** — the payload offset of the member seen last and that member's
+  field number. Every member writes both, so last-wins holds across members, not just
+  within one. Absence is keyed off the offset slot.
 - Unknown fields (not in the schema) are skipped and not indexed.
 
 Validated recursively, indexed lazily. `parse` walks the whole message tree once —
@@ -147,16 +150,28 @@ No allocation: `N` is known at codegen time, so the table is inline.
 | `bytes` + `fixed_bytes` config | `fn pubkey(&self) -> [u8; 32]` — by value; length checked at parse |
 | `repeated T` | `fn items(&self) -> impl Iterator<Item = T>`; strings yield `Result<&str, Utf8Error>` (plus `items_bytes()`), as the singular getter does |
 | `map<K, V>` | `fn m(&self) -> impl Iterator<Item = (K, V)>` plus `collect_map()` |
-| `oneof` | `enum` with an `Unknown(u32)` variant |
+| `oneof update_oneof` in `SubscribeUpdate` | `fn update_oneof(&self) -> Option<subscribe_update::UpdateOneof<'_>>`; the enum has one variant per member, named and placed as `prost` does, and a lifetime only if some member borrows |
 | proto3 `enum` | `enum` with an `Unknown(i32)` variant and `to_i32()` |
 
 Rationale for the less obvious ones:
 
-- **`Unknown` on oneofs and enums.** Both are live in the corpus — `SubscribeUpdate`
-  gained `pong = 9` and `transaction_status = 10`; `SlotStatus` grew from 3 variants to
-  7. Folding an unrecognized tag into `None` makes a server rollout emitting a new
-  variant indistinguishable from an idle stream. Cost: an extra match arm, and enums are
-  not `#[repr(i32)]` so `to_i32()` replaces an `as` cast.
+- **`Unknown` on enums.** Live in the corpus — `SlotStatus` grew from 3 variants to 7.
+  Folding an unrecognized value into a default makes a server rollout emitting a new
+  variant indistinguishable from an old one. Cost: an extra match arm, and enums are not
+  `#[repr(i32)]` so `to_i32()` replaces an `as` cast.
+- **No `Unknown` on oneofs.** An earlier draft promised one, motivated by `SubscribeUpdate`
+  gaining `pong = 9` and `transaction_status = 10`. It cannot be built: a member the
+  schema does not know is just an unknown field number on the wire, with nothing tying it
+  to the oneof, so the decoder cannot tell it from any other unknown field. Such an
+  update reads as `None` — as with `prost`. An enum is different: its unknown value
+  arrives inside a field the schema does know.
+- **UTF-8 is checked lazily, per getter call.** `parse` skips string payloads like
+  `bytes` (length, bounds, jump), so strings are the one getter that can fail. Deliberate:
+  eager validation would make `parse` read every string byte — `log_messages` dominates
+  Solana payloads and is rarely read — and an infallible `&str` getter would need
+  `from_utf8_unchecked` resting on `B::as_ref()` returning the same bytes each call.
+  Unlike `prost`, a message with invalid UTF-8 in a string field still parses; the error
+  surfaces only if that field is read. `_bytes()` twins give unchecked access.
 - **No `get(&key)` on maps.** A map is `repeated` message on the wire; lookup is a
   linear scan however it is named. `.find(...)` puts the cost where the reader sees it.
   `collect_map()` exists for `HashMap` last-wins semantics, with its allocation visible.
@@ -177,7 +192,7 @@ Identical to `prost`, stutter included:
 | `SLOT_PROCESSED` in `SlotStatus` | `SlotStatus::SlotProcessed` |
 | field `block_time` | `fn block_time()` |
 | field `type` | `fn r#type()` |
-| package `solana.storage.ConfirmedBlock` | mod `solana::storage::confirmed_block`, file `solana.storage.ConfirmedBlock.rs` |
+| package `solana.storage.ConfirmedBlock` | mod `solana::storage::confirmed_block`, file `solana.storage.confirmed_block.rs` |
 
 `SlotStatus::SlotProcessed` stutters because `prost` strips a variant prefix only when it
 matches the enum's full shouty name (`SLOT_STATUS`). Kept anyway: "identical to prost" is
@@ -214,9 +229,10 @@ fn main() -> Result<(), proto_codec_gen::Error> {
   `solana-storage.proto` are not listed — they arrive through `fumarole.proto`'s imports.
   Requiring explicit listing means a schema author adding an import silently breaks a
   downstream build with a "cannot find type" error inside generated code.
-- Output to `OUT_DIR` by default, plus a root file declaring the full module tree so the
-  user writes one `include!` and cannot get the nesting wrong. Per-package includes
-  remain available.
+- Output to `OUT_DIR` by default, one file per package named as `prost-build` names it
+  (module segments joined by `.`; `_.rs` for no package). Files carry no `mod` wrappers;
+  the user nests one `include!` per package in modules mirroring the package hierarchy,
+  as with `prost`. A generated root file declaring the whole tree is not provided yet.
 - A configurable output directory is supported, for checked-in generated code — for a
   library whose value proposition is the *shape* of its output, reading it in a PR diff
   matters.

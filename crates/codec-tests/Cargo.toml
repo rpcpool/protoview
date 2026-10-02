@@ -9,6 +9,7 @@ proto-codec = { workspace = true }
 
 [dev-dependencies]
 prost = { workspace = true }
+yellowstone-grpc-proto = { workspace = true }
 
 [build-dependencies]
 proto-codec-gen = { workspace = true }

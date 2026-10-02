@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 use prost_types::field_descriptor_proto::{Label, Type as FieldType};
 use prost_types::{DescriptorProto, FileDescriptorSet};
@@ -26,12 +26,21 @@ pub enum Scalar {
     Bytes,
 }
 
+/// A resolved reference to a generated message type.
+#[derive(Debug, Clone)]
+pub struct TypeRef {
+    /// Rust module path of the package the type lives in, from the include root.
+    pub module: Vec<String>,
+    /// The type's Rust name.
+    pub rust_name: String,
+}
+
 /// What a field's payload is, once `type_name` (if any) has been resolved.
 #[derive(Debug, Clone)]
 pub enum FieldKind {
     Scalar(Scalar),
-    /// A singular nested message, naming its absolute Rust path from the crate root.
-    Message(String),
+    /// A nested message. Codegen renders the path relative to the referencing package.
+    Message(TypeRef),
 }
 
 #[derive(Debug, Clone)]
@@ -46,12 +55,27 @@ pub struct Field {
     pub kind: FieldKind,
 }
 
+/// A real (non-synthetic) `oneof`: at most one of its members is set, and the last one
+/// on the wire wins.
+#[derive(Debug, Clone)]
+pub struct Oneof {
+    /// The `oneof`'s proto name, e.g. `update_oneof`.
+    pub name: String,
+    /// Its members, in declaration order. Never `repeated` or `optional`.
+    pub members: Vec<Field>,
+}
+
 #[derive(Debug, Clone)]
 pub struct Message {
     pub rust_name: String,
-    /// Rust module path this message's code lives in, from the crate root.
+    /// Rust module path of this message's package, from the include root. Also decides
+    /// which generated file the message is written to.
     pub module: Vec<String>,
+    /// Fields outside any real `oneof`, in declaration order.
     pub fields: Vec<Field>,
+    /// Real `oneof`s, in declaration order. proto3 `optional` fields, which protoc wraps
+    /// in a synthetic single-member oneof, are in `fields` instead.
+    pub oneofs: Vec<Oneof>,
 }
 
 /// The result of walking a compiled [`FileDescriptorSet`]: every message the codegen
@@ -60,19 +84,12 @@ pub struct Model {
     pub messages: Vec<Message>,
 }
 
-/// Where a resolved proto type lives, for rendering field types as absolute Rust paths.
-struct TypeLocation {
-    rust_name: String,
-    module: Vec<String>,
-}
-
 impl Model {
     /// Walks every file in `set`, producing a [`Model`].
     ///
     /// # Errors
     ///
-    /// [`Error::UnsupportedField`] for `oneof` members,
-    /// map fields, group fields, and enum fields — none of these are implemented yet —
+    /// [`Error::UnsupportedField`] for map fields, group fields, and enum fields — none of these are implemented yet —
     /// and for nested `message`/`enum` declarations, since only top-level messages are
     /// handled so far. [`Error::UnresolvedType`] if a message field's `type_name` does
     /// not name a message declared in `set`.
@@ -90,15 +107,18 @@ impl Model {
     }
 }
 
-fn index_types(set: &FileDescriptorSet) -> HashMap<String, TypeLocation> {
+fn index_types(set: &FileDescriptorSet) -> HashMap<String, TypeRef> {
     let mut locations = HashMap::new();
     for file in &set.file {
         let module = module_path(file.package());
         for descriptor in &file.message_type {
-            let proto_name = format!(".{}.{}", file.package(), descriptor.name());
+            let proto_name = match file.package() {
+                "" => format!(".{}", descriptor.name()),
+                package => format!(".{package}.{}", descriptor.name()),
+            };
             locations.insert(
                 proto_name,
-                TypeLocation {
+                TypeRef {
                     rust_name: descriptor.name().to_string(),
                     module: module.clone(),
                 },
@@ -108,20 +128,10 @@ fn index_types(set: &FileDescriptorSet) -> HashMap<String, TypeLocation> {
     locations
 }
 
-/// Resolves a fully-qualified proto message name to an absolute Rust path from the
-/// crate root, e.g. `.pkg.Foo` -> `crate::pkg::Foo`.
-fn rust_path(type_name: &str, locations: &HashMap<String, TypeLocation>) -> Option<String> {
-    let location = locations.get(type_name)?;
-    let mut path = vec!["crate".to_string()];
-    path.extend(location.module.iter().cloned());
-    path.push(location.rust_name.clone());
-    Some(path.join("::"))
-}
-
 fn build_message(
     descriptor: &DescriptorProto,
     module: &[String],
-    locations: &HashMap<String, TypeLocation>,
+    locations: &HashMap<String, TypeRef>,
 ) -> Result<Message, Error> {
     let message_name = descriptor.name().to_string();
 
@@ -134,18 +144,14 @@ fn build_message(
     }
 
     let mut fields = Vec::with_capacity(descriptor.field.len());
+    // Keyed by `oneof_index`, so oneofs come out in declaration order.
+    let mut oneof_members: BTreeMap<i32, Vec<Field>> = BTreeMap::new();
     for field in &descriptor.field {
         let field_name = field.name().to_string();
         // proto3 `optional` is encoded as a single-member synthetic oneof, so its
-        // `oneof_index` is set; only real oneofs are rejected.
+        // `oneof_index` is set too; only non-optional members belong to a real oneof.
         let optional = field.proto3_optional();
-        if field.oneof_index.is_some() && !optional {
-            return Err(Error::UnsupportedField {
-                message: message_name,
-                field: field_name,
-                reason: "oneof members are not supported yet",
-            });
-        }
+        let oneof_index = field.oneof_index.filter(|_| !optional);
 
         let kind = match field.r#type() {
             FieldType::Double => FieldKind::Scalar(Scalar::Double),
@@ -165,8 +171,8 @@ fn build_message(
             FieldType::Sint64 => FieldKind::Scalar(Scalar::Sint64),
             FieldType::Message => {
                 let type_name = field.type_name().to_string();
-                match rust_path(&type_name, locations) {
-                    Some(path) => FieldKind::Message(path),
+                match locations.get(&type_name) {
+                    Some(target) => FieldKind::Message(target.clone()),
                     None => {
                         return Err(Error::UnresolvedType {
                             message: message_name,
@@ -192,18 +198,35 @@ fn build_message(
             }
         };
 
-        fields.push(Field {
+        let field = Field {
             name: field_name,
             number: field.number() as u32,
             repeated: field.label() == Label::Repeated,
             optional,
             kind,
-        });
+        };
+        match oneof_index {
+            Some(index) => oneof_members.entry(index).or_default().push(field),
+            None => fields.push(field),
+        }
     }
+
+    let oneofs = oneof_members
+        .into_iter()
+        .map(|(index, members)| Oneof {
+            name: descriptor
+                .oneof_decl
+                .get(index as usize)
+                .map(|decl| decl.name().to_string())
+                .unwrap_or_default(),
+            members,
+        })
+        .collect();
 
     Ok(Message {
         rust_name: message_name,
         module: module.to_vec(),
         fields,
+        oneofs,
     })
 }

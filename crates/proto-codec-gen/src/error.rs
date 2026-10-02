@@ -9,9 +9,9 @@ pub enum Error {
     Protox(protox::Error),
     /// A message field used a construct this crate's codegen does not yet support.
     ///
-    /// Scoped deliberately: only scalars and nested messages — singular, `optional` or
-    /// `repeated` — are handled so far. `map`, `oneof`, and `enum` fields are staged for
-    /// later.
+    /// Scoped deliberately: only scalars and nested messages — singular, `optional`,
+    /// `repeated`, or `oneof` members — are handled so far. `map` and `enum` fields are
+    /// staged for later.
     UnsupportedField {
         /// Fully-qualified name of the message the field is declared on.
         message: String,

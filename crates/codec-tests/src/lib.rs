@@ -4,10 +4,44 @@
 //! mode for a codegen crate, and the only way to catch it is to generate and compile
 //! it, which is what `cargo test` here does.
 
-include!(concat!(env!("OUT_DIR"), "/proto_codec_gen.rs"));
+// One generated file per proto package; the module tree mirrors the package hierarchy,
+// which the generated `super::` paths between packages rely on.
+pub mod fixtures {
+    pub mod all_types {
+        include!(concat!(env!("OUT_DIR"), "/fixtures.all_types.rs"));
+    }
+    pub mod oneof {
+        include!(concat!(env!("OUT_DIR"), "/fixtures.oneof.rs"));
+    }
+    pub mod nested {
+        include!(concat!(env!("OUT_DIR"), "/fixtures.nested.rs"));
+    }
+    pub mod repeated {
+        include!(concat!(env!("OUT_DIR"), "/fixtures.repeated.rs"));
+    }
+}
+pub mod geyser {
+    include!(concat!(env!("OUT_DIR"), "/geyser.rs"));
+}
+pub mod google {
+    pub mod protobuf {
+        include!(concat!(env!("OUT_DIR"), "/google.protobuf.rs"));
+    }
+}
+pub mod solana {
+    pub mod storage {
+        pub mod confirmed_block {
+            include!(concat!(env!("OUT_DIR"), "/solana.storage.confirmed_block.rs"));
+        }
+    }
+}
 
 #[cfg(test)]
 mod all_types_tests;
+#[cfg(test)]
+mod oneof_tests;
+#[cfg(test)]
+mod yellowstone_tests;
 
 #[cfg(test)]
 mod tests {
