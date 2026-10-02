@@ -16,7 +16,7 @@ sit next to prost-generated types for the same schema.
 
 | Path | What it is |
 | --- | --- |
-| `crates/protoview` | Runtime used by generated code. `no_std`, no dependencies. Varint/wire readers, the structural `Scanner`, repeated-field and map-entry iteration, `DecodeError`. |
+| `crates/protoview` | Runtime used by generated code. `no_std`, no dependencies. Varint/wire readers, the structural `Scanner`, repeated-field and map-entry iteration, `DecodeError`, and the `SharedBytes` trait (`bytes` feature adds the `bytes::Bytes` impl). |
 | `crates/protoview-build` | The generator. `protox` parses `.proto` files → `model.rs` resolves them → `codegen.rs` renders one Rust file per proto package. `naming.rs` holds the prost-compatible naming rules. |
 | `crates/protoview-tests` | Unpublished. Generates code from the fixtures and tests it end to end. The only way to catch generated code that does not compile. |
 | `crates/geyser-index-bench` | CLI that subscribes to Yellowstone gRPC and times view indexing of live `SubscribeUpdate`s against `prost`. Reads `GRPC_ENDPOINT` and `X_TOKEN` from the environment or `.env` (see `.env.example`). |
@@ -59,6 +59,11 @@ Changes to codegen or the runtime must preserve these:
   encodings may be mixed; unknown fields are skipped.
 - **`fixed_bytes` fields are exact**: `parse` rejects any other length, including an absent
   plain field (proto3's empty default). Never pad or truncate.
+- **`into_inner` and `*_owned`**: every view has `into_inner(self) -> B`. A second
+  `impl<B: protoview::SharedBytes>` block adds `*_owned` getters for message fields (singular
+  and repeated) and for oneofs with a borrowing member (returning a `...Owned<B>` enum); maps
+  are not covered. `slice_ref` must never panic on the `&[]` fallback the readers use, so it
+  yields an empty container for anything outside the buffer.
 - **Unknown enum values are kept** as `Unknown(i32)` (or `Unrecognized` if the schema declares
   `UNKNOWN`). There is no `Unknown` on oneofs: a member the schema does not know is just an
   unknown field on the wire, so a decoder cannot attribute it.
@@ -89,7 +94,7 @@ Changes to codegen or the runtime must preserve these:
   confirm with `cargo doc` (above).
 - **Hot paths** (anything per message or per field): no `Box<dyn Future>`, no locks, no
   allocation. The bench's receive loop counts as a hot path too.
-- **Runtime crate** stays `no_std` and dependency-free. Generated code uses `core::` paths.
+- **Runtime crate** stays `no_std` and dependency-free by default; the only optional dependency is `bytes`, behind the `bytes` feature, for the `SharedBytes` impl. Generated code uses `core::` paths.
 - Match the surrounding code's comment density and idiom; generated-code strings in
   `codegen.rs` are written to produce readable, rustfmt-like output.
 
@@ -125,11 +130,14 @@ Changes to codegen or the runtime must preserve these:
   harmless and not included.
 - View getters return views borrowing `&self`, not the underlying buffer, so walking down
   a tree in a loop that drops parents does not borrow-check; recurse instead.
+- A new `*_owned` getter needs a test in `crates/protoview-tests/src/shared_bytes_tests.rs`
+  that checks the owned view points into the original `Bytes` allocation (no copy).
 - Views and oneof enums derive nothing (`Debug`, `Clone`); proto enums derive the usual set.
 
 ## Not implemented yet
 
 - proto2 features: groups are rejected; extensions and proto2 defaults are not handled.
 - `fixed_bytes` on map values.
+- `*_owned` getters for map fields and for repeated `string`/`bytes`.
 - A generated root file declaring the whole module tree (one `include!` instead of one per
   package).

@@ -161,7 +161,127 @@ fn render_message(message: &Message) -> String {
     }
 
     let _ = writeln!(out, "}}");
+    render_owned_impl(&mut out, message, &layout);
     out
+}
+
+/// Renders the second `impl` block, available when the buffer type is
+/// `protoview::SharedBytes`: `*_owned` getters returning nested views that
+/// own a slice of the same buffer rather than borrowing from this view. Covers message
+/// fields (singular and repeated) and `oneof`s that have a member borrowing from the buffer;
+/// maps are not covered. Renders nothing for a message with no such field.
+fn render_owned_impl(out: &mut String, message: &Message, layout: &IndexLayout) {
+    let pad = "    ";
+    let mut body = String::new();
+    for (field, &slot) in message.fields.iter().zip(&layout.field_slots) {
+        if let FieldKind::Message(target) = &field.kind {
+            render_owned_message_getter(&mut body, pad, &message.module, slot, field, target);
+        }
+    }
+    for (oneof, &slot) in message.oneofs.iter().zip(&layout.oneof_slots) {
+        if OneofNames::of(message, oneof).borrows {
+            render_owned_oneof_getter(&mut body, pad, message, oneof, slot);
+        }
+    }
+    if body.is_empty() {
+        return;
+    }
+    let name = &message.rust_name;
+    let _ = writeln!(out, "#[allow(clippy::wrong_self_convention)]");
+    let _ = writeln!(out, "impl<B: protoview::SharedBytes> {name}<B> {{");
+    out.push_str(&body);
+    let _ = writeln!(out, "}}");
+}
+
+/// An expression for the owned form of a length-delimited payload at `offset`: a
+/// sub-buffer of `self.buf` holding exactly the payload.
+fn owned_payload_expr(offset: &str) -> String {
+    format!(
+        "protoview::SharedBytes::slice_ref(&self.buf, protoview::wire::read_length_delimited(self.buf.as_ref(), {offset}).unwrap_or(&[]))"
+    )
+}
+
+/// Renders the `*_owned` getter for a message-typed field: `Option<View<B>>` for a singular
+/// field, an iterator of `View<B>` for a repeated one.
+fn render_owned_message_getter(
+    out: &mut String,
+    pad: &str,
+    module: &[String],
+    slot: usize,
+    field: &Field,
+    target: &TypeRef,
+) {
+    let name = field_fn_name(&field.name);
+    let path = relative_path(module, target);
+    if field.repeated {
+        let _ = writeln!(
+            out,
+            "{pad}/// Like [`Self::{name}`], but each element owns a slice of this view's buffer.\n\
+             {pad}pub fn {name}_owned(&self) -> impl Iterator<Item = {path}<B>> + '_ {{\n\
+             {pad}    protoview::repeated::Records::new(self.buf.as_ref(), self.index[{slot}], self.index[{end}], {number})\n\
+             {pad}        .filter(|field| field.wire_type == protoview::WireType::LengthDelimited)\n\
+             {pad}        .map(|field| {path}::from_validated({payload}))\n\
+             {pad}}}",
+            end = slot + 1,
+            number = field.number,
+            payload = owned_payload_expr("field.payload as usize"),
+        );
+    } else {
+        let _ = writeln!(
+            out,
+            "{pad}/// Like [`Self::{name}`], but the view owns a slice of this view's buffer.\n\
+             {pad}pub fn {name}_owned(&self) -> Option<{path}<B>> {{\n\
+             {pad}    let offset = self.index[{slot}];\n\
+             {pad}    if offset == 0 {{ return None; }}\n\
+             {pad}    Some({path}::from_validated({payload}))\n\
+             {pad}}}",
+            payload = owned_payload_expr("offset as usize"),
+        );
+    }
+}
+
+/// Renders the `*_owned` getter for a `oneof`, returning the `...Owned<B>` enum.
+fn render_owned_oneof_getter(
+    out: &mut String,
+    pad: &str,
+    message: &Message,
+    oneof: &Oneof,
+    slot: usize,
+) {
+    let names = OneofNames::of(message, oneof);
+    let fn_name = field_fn_name(&oneof.name);
+    let enum_path = format!("{}::{}Owned", names.module, names.enum_name);
+    let member_slot = slot + 1;
+
+    let _ = writeln!(
+        out,
+        "{pad}/// Like [`Self::{fn_name}`], but members that borrow from the buffer own a slice of it.\n\
+         {pad}pub fn {fn_name}_owned(&self) -> Option<{enum_path}<B>> {{\n\
+         {pad}    let offset = self.index[{slot}];\n\
+         {pad}    if offset == 0 {{ return None; }}\n\
+         {pad}    let offset = offset as usize;\n\
+         {pad}    match self.index[{member_slot}] {{"
+    );
+    for member in &oneof.members {
+        let variant = upper_camel(&member.name);
+        let value = match &member.kind {
+            FieldKind::Scalar(Scalar::String | Scalar::Bytes) => owned_payload_expr("offset"),
+            FieldKind::Message(target) => format!(
+                "{}::from_validated({})",
+                relative_path(&message.module, target),
+                owned_payload_expr("offset")
+            ),
+            kind => value_expr(kind, &message.module, "self.buf.as_ref()", "offset"),
+        };
+        let _ = writeln!(
+            out,
+            "{pad}        {} => Some({enum_path}::{variant}({value})),",
+            member.number
+        );
+    }
+    let _ = writeln!(out, "{pad}        _ => None,");
+    let _ = writeln!(out, "{pad}    }}");
+    let _ = writeln!(out, "{pad}}}");
 }
 
 /// Whether `message` has anything to index: a field outside or inside a `oneof`.
@@ -227,6 +347,16 @@ fn render_parse(out: &mut String, pad: &str, message: &Message, layout: &IndexLa
     );
     let _ = writeln!(out, "{pad}    Ok(Self {{ buf, index }})");
     let _ = writeln!(out, "{pad}}}");
+    let _ = writeln!(
+        out,
+        "{pad}/// Consumes the view and returns the byte container it was built over.\n\
+         {pad}///\n\
+         {pad}/// For a view returned by `parse` that is the whole buffer passed in; for a nested\n\
+         {pad}/// view reached through a getter it is that message's own bytes.\n\
+         {pad}pub fn into_inner(self) -> B {{\n\
+         {pad}    self.buf\n\
+         {pad}}}"
+    );
 
     let _ = writeln!(
         out,
@@ -775,8 +905,40 @@ fn render_oneof_enums(message: &Message) -> String {
             let _ = writeln!(out, "    {variant}({payload}),");
         }
         let _ = writeln!(out, "}}");
+        if names.borrows {
+            render_owned_oneof_enum(&mut out, message, oneof, &names);
+        }
     }
     out
+}
+
+/// Renders the `...Owned<B>` companion of a `oneof` enum: the same members, but message
+/// members are views over `B`, and `string` and `bytes` members are `B` holding the raw
+/// payload (a `string` is not UTF-8 checked).
+fn render_owned_oneof_enum(out: &mut String, message: &Message, oneof: &Oneof, names: &OneofNames) {
+    let _ = writeln!(
+        out,
+        "/// The members of `{}.{}` as returned by its `*_owned` getter: members that borrowed\n\
+         /// from the buffer instead own a slice of it.",
+        message.rust_name, oneof.name
+    );
+    let _ = writeln!(
+        out,
+        "#[allow(clippy::enum_variant_names, clippy::large_enum_variant)]"
+    );
+    let _ = writeln!(out, "pub enum {}Owned<B: AsRef<[u8]>> {{", names.enum_name);
+    for member in &oneof.members {
+        let variant = upper_camel(&member.name);
+        let payload = match &member.kind {
+            FieldKind::Scalar(Scalar::String | Scalar::Bytes) => "B".to_string(),
+            FieldKind::Message(target) => {
+                format!("{}<B>", relative_path(&message.nested_module, target))
+            }
+            kind => value_type(kind, &message.nested_module, ""),
+        };
+        let _ = writeln!(out, "    {variant}({payload}),");
+    }
+    let _ = writeln!(out, "}}");
 }
 
 // ---------------------------------------------------------------------------------------

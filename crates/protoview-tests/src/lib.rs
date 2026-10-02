@@ -70,6 +70,8 @@ mod oneof_tests;
 #[cfg(test)]
 mod readme_tests;
 #[cfg(test)]
+mod shared_bytes_tests;
+#[cfg(test)]
 mod yellowstone_tests;
 
 #[cfg(test)]

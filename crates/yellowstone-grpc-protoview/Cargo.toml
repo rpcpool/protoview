@@ -34,7 +34,7 @@ bytes = { workspace = true }
 clap = { workspace = true, optional = true }
 dotenvy = { workspace = true, optional = true }
 prost = { workspace = true }
-protoview = { workspace = true }
+protoview = { workspace = true, features = ["bytes"] }
 thiserror = { workspace = true, optional = true }
 tokio = { workspace = true, optional = true }
 tokio-stream = { workspace = true, optional = true }
