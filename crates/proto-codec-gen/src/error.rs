@@ -9,9 +9,7 @@ pub enum Error {
     Protox(protox::Error),
     /// A message field used a construct this crate's codegen does not yet support.
     ///
-    /// Scoped deliberately: only scalars and nested messages — singular, `optional`,
-    /// `repeated`, or `oneof` members — are handled so far. `map` and `enum` fields are
-    /// staged for later.
+    /// Only groups (proto2) reach this today; every proto3 field shape is supported.
     UnsupportedField {
         /// Fully-qualified name of the message the field is declared on.
         message: String,
@@ -28,7 +26,10 @@ pub enum Error {
         type_name: String,
     },
     /// Writing generated source to disk failed.
-    Io { path: PathBuf, source: std::io::Error },
+    Io {
+        path: PathBuf,
+        source: std::io::Error,
+    },
 }
 
 impl fmt::Display for Error {

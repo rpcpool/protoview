@@ -1,0 +1,26 @@
+// Maps across key types (string, signed, unsigned, zig-zag, fixed, bool) and value types
+// (scalars, bytes, enums, messages from this and another package), with a plain field
+// declared among them so entries can interleave with it.
+syntax = "proto3";
+
+package fixtures.maps;
+
+import "enums.proto";
+import "nested.proto";
+
+message Value {
+    uint32 id = 1;
+    string name = 2;
+}
+
+message Maps {
+    map<string, string> labels = 1;
+    map<int32, Value> by_id = 2;
+    map<uint64, bytes> blobs = 3;
+    map<sint64, double> scores = 4;
+    map<bool, fixtures.enums.Color> flags = 5;
+    map<fixed32, fixtures.nested.Inner> foreign = 6;
+    map<string, int64> counters = 7;
+    uint32 between = 8;
+    map<sfixed64, uint32> wide = 9;
+}

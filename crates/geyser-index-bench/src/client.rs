@@ -127,7 +127,11 @@ pub async fn subscribe(config: &ClientConfig, initial: SubscribeRequest) -> Resu
         source,
     })?;
     let updates = grpc
-        .streaming(request, PathAndQuery::from_static(SUBSCRIBE_PATH), RawUpdateCodec)
+        .streaming(
+            request,
+            PathAndQuery::from_static(SUBSCRIBE_PATH),
+            RawUpdateCodec,
+        )
         .await
         .map_err(ClientError::Subscribe)?
         .into_inner();
@@ -168,8 +172,11 @@ async fn connect(endpoint: &str) -> Result<Channel> {
             })?;
     }
 
-    builder.connect().await.map_err(|source| ClientError::Connect {
-        endpoint: endpoint.to_string(),
-        source,
-    })
+    builder
+        .connect()
+        .await
+        .map_err(|source| ClientError::Connect {
+            endpoint: endpoint.to_string(),
+            source,
+        })
 }

@@ -10,6 +10,12 @@ pub mod fixtures {
     pub mod all_types {
         include!(concat!(env!("OUT_DIR"), "/fixtures.all_types.rs"));
     }
+    pub mod enums {
+        include!(concat!(env!("OUT_DIR"), "/fixtures.enums.rs"));
+    }
+    pub mod maps {
+        include!(concat!(env!("OUT_DIR"), "/fixtures.maps.rs"));
+    }
     pub mod oneof {
         include!(concat!(env!("OUT_DIR"), "/fixtures.oneof.rs"));
     }
@@ -19,6 +25,9 @@ pub mod fixtures {
     pub mod repeated {
         include!(concat!(env!("OUT_DIR"), "/fixtures.repeated.rs"));
     }
+}
+pub mod fumarole {
+    include!(concat!(env!("OUT_DIR"), "/fumarole.rs"));
 }
 pub mod geyser {
     include!(concat!(env!("OUT_DIR"), "/geyser.rs"));
@@ -31,13 +40,18 @@ pub mod google {
 pub mod solana {
     pub mod storage {
         pub mod confirmed_block {
-            include!(concat!(env!("OUT_DIR"), "/solana.storage.confirmed_block.rs"));
+            include!(concat!(
+                env!("OUT_DIR"),
+                "/solana.storage.confirmed_block.rs"
+            ));
         }
     }
 }
 
 #[cfg(test)]
 mod all_types_tests;
+#[cfg(test)]
+mod enums_maps_tests;
 #[cfg(test)]
 mod oneof_tests;
 #[cfg(test)]
@@ -75,15 +89,9 @@ mod tests {
 
         let outer = Outer::parse(msg.as_slice()).unwrap();
         assert_eq!(outer.id(), 7);
-        assert_eq!(
-            outer.name().unwrap(),
-            "outer-name"
-        );
+        assert_eq!(outer.name().unwrap(), "outer-name");
         assert_eq!(outer.owner().unwrap(), "");
-        assert_eq!(
-            outer.label().unwrap(),
-            "outer-label"
-        );
+        assert_eq!(outer.label().unwrap(), "outer-label");
 
         let inner: Inner<&[u8]> = outer.inner().unwrap();
         assert_eq!(inner.ratio(), 1.5);
@@ -305,7 +313,10 @@ mod repeated_tests {
         // `levels` wrappers put the innermost child at depth `levels`.
         let at_limit = nested_tree(MAX_DEPTH);
         fn depth<B: AsRef<[u8]>>(tree: &Tree<B>) -> u32 {
-            tree.children().map(|child| 1 + depth(&child)).max().unwrap_or(0)
+            tree.children()
+                .map(|child| 1 + depth(&child))
+                .max()
+                .unwrap_or(0)
         }
         let tree = Tree::parse(at_limit.as_slice()).unwrap();
         assert_eq!(depth(&tree), MAX_DEPTH);

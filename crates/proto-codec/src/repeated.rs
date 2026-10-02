@@ -6,8 +6,8 @@
 //! and the iterators here re-walk that span, yielding the matching records in wire order
 //! and skipping everything else.
 
-use crate::varint::read_varint;
 use crate::error::DecodeError;
+use crate::varint::read_varint;
 use crate::wire::{Field, Scanner, WireType, read_fixed32, read_fixed64, read_length_delimited};
 
 /// The records of one repeated field, in wire order.

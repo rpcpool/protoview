@@ -26,7 +26,7 @@ use tokio::time::MissedTickBehavior;
 
 use crate::client::{ClientConfig, ClientError, Subscription};
 use crate::measure::{Timer, UpdateKind};
-use crate::request::StreamArgs;
+use crate::request::Stream;
 use crate::stats::Stats;
 
 /// Benchmark lens indexing of live Yellowstone gRPC `SubscribeUpdate`s.
@@ -39,8 +39,15 @@ struct Cli {
     #[arg(long, value_name = "PATH")]
     env_file: Option<PathBuf>,
 
-    #[command(flatten)]
-    streams: StreamArgs,
+    /// Update streams to subscribe to, comma-separated or repeated. Each is unfiltered.
+    #[arg(
+        long,
+        value_enum,
+        value_delimiter = ',',
+        required = true,
+        value_name = "STREAM"
+    )]
+    subscribe: Vec<Stream>,
 
     /// Stop after this many seconds.
     #[arg(long, value_name = "SECS")]
@@ -167,12 +174,16 @@ async fn run(cli: Cli) -> Result<(), AppError> {
     };
 
     let timer = Timer::new(cli.repeat, !cli.no_prost);
-    let request = cli.streams.to_request();
+    let request = request::subscribe_request(&cli.subscribe);
     println!(
-        "subscribing to {} (x-token {}), commitment {:?}, repeat {}, prost comparison {}",
+        "subscribing to {:?} on {} (x-token {}), repeat {}, prost comparison {}",
+        cli.subscribe,
         config.endpoint,
-        if config.x_token.is_some() { "set" } else { "unset" },
-        cli.streams.commitment,
+        if config.x_token.is_some() {
+            "set"
+        } else {
+            "unset"
+        },
         cli.repeat,
         if timer.compares_prost() { "on" } else { "off" },
     );

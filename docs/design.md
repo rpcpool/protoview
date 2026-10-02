@@ -149,7 +149,7 @@ No allocation: `N` is known at codegen time, so the table is inline.
 | `bytes` | `fn data(&self) -> &[u8]` |
 | `bytes` + `fixed_bytes` config | `fn pubkey(&self) -> [u8; 32]` — by value; length checked at parse |
 | `repeated T` | `fn items(&self) -> impl Iterator<Item = T>`; strings yield `Result<&str, Utf8Error>` (plus `items_bytes()`), as the singular getter does |
-| `map<K, V>` | `fn m(&self) -> impl Iterator<Item = (K, V)>` plus `collect_map()` |
+| `map<K, V>` | `fn m(&self) -> impl Iterator<Item = (K, V)>`, in wire order; a missing key or value reads as its default |
 | `oneof update_oneof` in `SubscribeUpdate` | `fn update_oneof(&self) -> Option<subscribe_update::UpdateOneof<'_>>`; the enum has one variant per member, named and placed as `prost` does, and a lifetime only if some member borrows |
 | proto3 `enum` | `enum` with an `Unknown(i32)` variant and `to_i32()` |
 
@@ -174,7 +174,10 @@ Rationale for the less obvious ones:
   surfaces only if that field is read. `_bytes()` twins give unchecked access.
 - **No `get(&key)` on maps.** A map is `repeated` message on the wire; lookup is a
   linear scan however it is named. `.find(...)` puts the cost where the reader sees it.
-  `collect_map()` exists for `HashMap` last-wins semantics, with its allocation visible.
+  No `collect_map()` either, though an earlier draft had one: `.collect::<HashMap<_, _>>()`
+  already gives protobuf's last-wins semantics on duplicate keys, and a generated helper
+  would pull `std` into otherwise `core`-only code. String keys yield
+  `Result<&str, Utf8Error>` like every string, so collecting them goes through `?`.
 - **No `_opt` presence twins.** Would roughly double the generated surface across ~300
   corpus fields to serve a case that `optional` in the schema already covers.
 - **Iterator-only `repeated`.** Random access would hide an O(n) scan; the access
@@ -256,7 +259,9 @@ motivating cases (pubkeys, signatures, blockhashes, block UIDs) and
 types (lenses are constructed lazily, so no infinite type), `google.protobuf.Any`
 (structurally an ordinary message; no dynamic decoding, but nothing breaks).
 
-**Supported:** nested type declarations (`message Foo { message Bar {} }`). Absent from
+**Supported:** nested type declarations (`message Foo { message Bar {} }`), placed in a
+`foo` module as `prost` does; protoc's synthesized map entries are generated there too,
+`#[doc(hidden)]`, to validate entries. Absent from
 the corpus but common in the wild; erroring would make the library feel broken to the
 first person pointing it at their own schema, and the cost is only module nesting.
 

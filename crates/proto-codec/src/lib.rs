@@ -11,6 +11,7 @@
 #![cfg_attr(not(test), no_std)]
 
 pub mod error;
+pub mod map;
 pub mod repeated;
 pub mod varint;
 pub mod wire;

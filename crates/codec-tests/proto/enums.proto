@@ -1,0 +1,63 @@
+// Enums in every position (implicit, optional, repeated, oneof member), top-level and
+// nested, with prost's naming rules exercised: prefix stripping (COLOR_RED -> Red), a
+// prefix that does not strip (LOW stays Low), aliases, and a declared UNKNOWN value that
+// collides with the generated catch-all variant. Also nested messages, two levels deep.
+syntax = "proto3";
+
+package fixtures.enums;
+
+enum Color {
+    COLOR_UNSPECIFIED = 0;
+    COLOR_RED = 1;
+    COLOR_GREEN = 2;
+}
+
+enum Level {
+    LOW = 0;
+    HIGH = 5;
+}
+
+enum Aliased {
+    option allow_alias = true;
+    FIRST = 0;
+    ALSO_FIRST = 0;
+    SECOND = 2;
+}
+
+enum HasUnknown {
+    NOTHING = 0;
+    UNKNOWN = 1;
+}
+
+message Palette {
+    enum Shade {
+        SHADE_LIGHT = 0;
+        SHADE_DARK = 1;
+    }
+
+    message Swatch {
+        message Label {
+            string text = 1;
+        }
+
+        Color color = 1;
+        Shade shade = 2;
+        Label label = 3;
+    }
+
+    Color primary = 1;
+    optional Color accent = 2;
+    repeated Color history = 3;
+    Shade shade = 4;
+    Swatch swatch = 5;
+    repeated Swatch swatches = 6;
+
+    oneof pick {
+        Color picked_color = 7;
+        Level picked_level = 8;
+        Swatch.Label picked_label = 9;
+    }
+
+    Aliased aliased = 10;
+    HasUnknown flagged = 11;
+}

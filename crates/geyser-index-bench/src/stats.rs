@@ -169,7 +169,10 @@ impl KindStats {
     ///
     /// * `other` - Statistics to add.
     fn merge(&mut self, other: &Self) {
-        for (histogram, other) in [(&mut self.lens, &other.lens), (&mut self.prost, &other.prost)] {
+        for (histogram, other) in [
+            (&mut self.lens, &other.lens),
+            (&mut self.prost, &other.prost),
+        ] {
             for (bucket, n) in histogram.buckets.iter_mut().zip(other.buckets.iter()) {
                 *bucket += n;
             }
@@ -296,7 +299,11 @@ impl Stats {
             "kind", "count", "avg size", "p50", "p90", "p99", "max", "index/s"
         )?;
         if self.compare_prost {
-            write!(out, " | {:>8} {:>8} {:>10} {:>7}", "prost50", "prost99", "decode/s", "x p50")?;
+            write!(
+                out,
+                " | {:>8} {:>8} {:>10} {:>7}",
+                "prost50", "prost99", "decode/s", "x p50"
+            )?;
         }
         writeln!(out)?;
 

@@ -5,7 +5,7 @@ fn main() {
     println!("cargo:rerun-if-changed=../../proto");
 
     proto_codec_gen::Config::new()
-        .include("../../proto")
+        .include("../../proto/yellowstone")
         .compile(&["../../proto/yellowstone/geyser.proto"])
         .expect("codegen for the yellowstone protos must succeed");
 }

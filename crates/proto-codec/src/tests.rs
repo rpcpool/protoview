@@ -260,7 +260,11 @@ fn validate_numeric_accepts_well_formed_records() {
         (&[0x0a, 0x08, 0, 0, 0, 0, 0, 0, 0, 0], Width::Fixed32),
         (&[0x0a, 0x08, 0, 0, 0, 0, 0, 0, 0, 0], Width::Fixed64),
     ] {
-        assert_eq!(validate_numeric(buf, &first_field(buf), width), Ok(()), "{buf:?}");
+        assert_eq!(
+            validate_numeric(buf, &first_field(buf), width),
+            Ok(()),
+            "{buf:?}"
+        );
     }
 }
 
@@ -286,4 +290,17 @@ fn validate_numeric_rejects_malformed_records() {
         validate_numeric(&buf, &first_field(&buf), Width::Fixed32),
         Err(DecodeError::MalformedPackedField { field: 1 })
     );
+}
+
+#[test]
+fn map_entry_offsets_take_the_last_key_and_value() {
+    use crate::map::entry_offsets;
+    // value = "a", unknown field 3, key = 7, value = "b"
+    let entry = [0x12, 0x01, b'a', 0x18, 0x00, 0x08, 0x07, 0x12, 0x01, b'b'];
+    let (key, value) = entry_offsets(&entry);
+    assert_eq!(read_varint(&entry, key as usize), Ok((7, 7)));
+    assert_eq!(read_length_delimited(&entry, value as usize), Ok(&b"b"[..]));
+
+    assert_eq!(entry_offsets(&[]), (0, 0));
+    assert_eq!(entry_offsets(&[0x08, 0x05]).1, 0);
 }

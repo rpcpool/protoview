@@ -1,9 +1,9 @@
 //! Build-time protobuf code generator producing zero-copy lens types.
 //!
-//! See `docs/design.md` in the repository root for the full design. This is an early
-//! slice: [`Config::compile`] handles scalar fields and nested messages — singular,
-//! proto3 `optional`, `repeated`, or `oneof` members — only; `map` and `enum` fields are
-//! rejected with [`Error::UnsupportedField`] until later phases land.
+//! See `docs/design.md` in the repository root for the full design. [`Config::compile`]
+//! handles every proto3 field shape — scalars, enums, messages, `optional`, `repeated`,
+//! `map`, and `oneof` — and nested type declarations. Groups are rejected with
+//! [`Error::UnsupportedField`]; the `fixed_bytes` option is not implemented yet.
 
 mod codegen;
 mod error;

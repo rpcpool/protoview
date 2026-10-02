@@ -1,11 +1,10 @@
 //! Messages encoded by `yellowstone-grpc-proto` 13.0.0's `prost` types, decoded by the
-//! lenses generated from `proto/yellowstone/`.
+//! lenses generated from verbatim copies of its protos in `proto/yellowstone/`.
 //!
 //! Every check destructures the yellowstone struct exhaustively, so a field that is not
-//! asserted is a compile error rather than a silent gap. The only fields not compared
-//! are the two enum fields the fixture protos drop (`Reward.reward_type`,
-//! `SubscribeUpdateSlot.status`); the fixtures still set them, so decoding also proves
-//! they are skipped as unknown fields without disturbing their neighbours.
+//! asserted is a compile error rather than a silent gap.
+
+use std::collections::HashMap;
 
 use prost::Message as _;
 use yellowstone_grpc_proto::geyser as ys;
@@ -95,14 +94,22 @@ impl<B: AsRef<[u8]>> Matches<ys_st::ConfirmedBlock> for lens_st::ConfirmedBlock<
             block_height,
             num_partitions,
         } = expected;
-        assert_str(self.previous_blockhash(), previous_blockhash, "previous_blockhash");
+        assert_str(
+            self.previous_blockhash(),
+            previous_blockhash,
+            "previous_blockhash",
+        );
         assert_str(self.blockhash(), blockhash, "blockhash");
         assert_eq!(self.parent_slot(), *parent_slot, "parent_slot");
         assert_all(self.transactions(), transactions, "transactions");
         assert_all(self.rewards(), rewards, "rewards");
         assert_opt(self.block_time(), block_time.as_ref(), "block_time");
         assert_opt(self.block_height(), block_height.as_ref(), "block_height");
-        assert_opt(self.num_partitions(), num_partitions.as_ref(), "num_partitions");
+        assert_opt(
+            self.num_partitions(),
+            num_partitions.as_ref(),
+            "num_partitions",
+        );
     }
 }
 
@@ -116,7 +123,10 @@ impl<B: AsRef<[u8]>> Matches<ys_st::ConfirmedTransaction> for lens_st::Confirmed
 
 impl<B: AsRef<[u8]>> Matches<ys_st::Transaction> for lens_st::Transaction<B> {
     fn assert_matches(&self, expected: &ys_st::Transaction) {
-        let ys_st::Transaction { signatures, message } = expected;
+        let ys_st::Transaction {
+            signatures,
+            message,
+        } = expected;
         assert_bytes_list(self.signatures(), signatures, "signatures");
         assert_opt(self.message(), message.as_ref(), "message");
     }
@@ -135,7 +145,11 @@ impl<B: AsRef<[u8]>> Matches<ys_st::Message> for lens_st::Message<B> {
         } = expected;
         assert_opt(self.header(), header.as_ref(), "header");
         assert_bytes_list(self.account_keys(), account_keys, "account_keys");
-        assert_eq!(self.recent_blockhash(), recent_blockhash.as_slice(), "recent_blockhash");
+        assert_eq!(
+            self.recent_blockhash(),
+            recent_blockhash.as_slice(),
+            "recent_blockhash"
+        );
         assert_all(self.instructions(), instructions, "instructions");
         assert_eq!(self.versioned(), *versioned, "versioned");
         assert_all(
@@ -156,7 +170,11 @@ impl<B: AsRef<[u8]>> Matches<ys_st::TransactionConfig> for lens_st::TransactionC
             heap_size,
         } = expected;
         assert_eq!(self.priority_fee(), *priority_fee, "priority_fee");
-        assert_eq!(self.compute_unit_limit(), *compute_unit_limit, "compute_unit_limit");
+        assert_eq!(
+            self.compute_unit_limit(),
+            *compute_unit_limit,
+            "compute_unit_limit"
+        );
         assert_eq!(
             self.loaded_accounts_data_size_limit(),
             *loaded_accounts_data_size_limit,
@@ -174,8 +192,14 @@ impl<B: AsRef<[u8]>> Matches<ys_st::MessageHeader> for lens_st::MessageHeader<B>
             num_readonly_unsigned_accounts,
         } = expected;
         assert_eq!(self.num_required_signatures(), *num_required_signatures);
-        assert_eq!(self.num_readonly_signed_accounts(), *num_readonly_signed_accounts);
-        assert_eq!(self.num_readonly_unsigned_accounts(), *num_readonly_unsigned_accounts);
+        assert_eq!(
+            self.num_readonly_signed_accounts(),
+            *num_readonly_signed_accounts
+        );
+        assert_eq!(
+            self.num_readonly_unsigned_accounts(),
+            *num_readonly_unsigned_accounts
+        );
     }
 }
 
@@ -189,8 +213,16 @@ impl<B: AsRef<[u8]>> Matches<ys_st::MessageAddressTableLookup>
             readonly_indexes,
         } = expected;
         assert_eq!(self.account_key(), account_key.as_slice(), "account_key");
-        assert_eq!(self.writable_indexes(), writable_indexes.as_slice(), "writable_indexes");
-        assert_eq!(self.readonly_indexes(), readonly_indexes.as_slice(), "readonly_indexes");
+        assert_eq!(
+            self.writable_indexes(),
+            writable_indexes.as_slice(),
+            "writable_indexes"
+        );
+        assert_eq!(
+            self.readonly_indexes(),
+            readonly_indexes.as_slice(),
+            "readonly_indexes"
+        );
     }
 }
 
@@ -217,14 +249,34 @@ impl<B: AsRef<[u8]>> Matches<ys_st::TransactionStatusMeta> for lens_st::Transact
         } = expected;
         assert_opt(self.err(), err.as_ref(), "err");
         assert_eq!(self.fee(), *fee, "fee");
-        assert_eq!(self.pre_balances().collect::<Vec<_>>(), *pre_balances, "pre_balances");
-        assert_eq!(self.post_balances().collect::<Vec<_>>(), *post_balances, "post_balances");
-        assert_all(self.inner_instructions(), inner_instructions, "inner_instructions");
+        assert_eq!(
+            self.pre_balances().collect::<Vec<_>>(),
+            *pre_balances,
+            "pre_balances"
+        );
+        assert_eq!(
+            self.post_balances().collect::<Vec<_>>(),
+            *post_balances,
+            "post_balances"
+        );
+        assert_all(
+            self.inner_instructions(),
+            inner_instructions,
+            "inner_instructions",
+        );
         assert_eq!(self.inner_instructions_none(), *inner_instructions_none);
         assert_strs(self.log_messages(), log_messages, "log_messages");
         assert_eq!(self.log_messages_none(), *log_messages_none);
-        assert_all(self.pre_token_balances(), pre_token_balances, "pre_token_balances");
-        assert_all(self.post_token_balances(), post_token_balances, "post_token_balances");
+        assert_all(
+            self.pre_token_balances(),
+            pre_token_balances,
+            "pre_token_balances",
+        );
+        assert_all(
+            self.post_token_balances(),
+            post_token_balances,
+            "post_token_balances",
+        );
         assert_all(self.rewards(), rewards, "rewards");
         assert_bytes_list(
             self.loaded_writable_addresses(),
@@ -300,7 +352,11 @@ impl<B: AsRef<[u8]>> Matches<ys_st::TokenBalance> for lens_st::TokenBalance<B> {
         } = expected;
         assert_eq!(self.account_index(), *account_index, "account_index");
         assert_str(self.mint(), mint, "mint");
-        assert_opt(self.ui_token_amount(), ui_token_amount.as_ref(), "ui_token_amount");
+        assert_opt(
+            self.ui_token_amount(),
+            ui_token_amount.as_ref(),
+            "ui_token_amount",
+        );
         assert_str(self.owner(), owner, "owner");
         assert_str(self.program_id(), program_id, "program_id");
     }
@@ -317,7 +373,11 @@ impl<B: AsRef<[u8]>> Matches<ys_st::UiTokenAmount> for lens_st::UiTokenAmount<B>
         assert_eq!(self.ui_amount(), *ui_amount, "ui_amount");
         assert_eq!(self.decimals(), *decimals, "decimals");
         assert_str(self.amount(), amount, "amount");
-        assert_str(self.ui_amount_string(), ui_amount_string, "ui_amount_string");
+        assert_str(
+            self.ui_amount_string(),
+            ui_amount_string,
+            "ui_amount_string",
+        );
     }
 }
 
@@ -335,13 +395,14 @@ impl<B: AsRef<[u8]>> Matches<ys_st::Reward> for lens_st::Reward<B> {
             pubkey,
             lamports,
             post_balance,
-            reward_type: _, // enum; dropped from the fixture proto
+            reward_type,
             commission,
             commission_bps,
         } = expected;
         assert_str(self.pubkey(), pubkey, "pubkey");
         assert_eq!(self.lamports(), *lamports, "lamports");
         assert_eq!(self.post_balance(), *post_balance, "post_balance");
+        assert_eq!(self.reward_type().to_i32(), *reward_type, "reward_type");
         assert_str(self.commission(), commission, "commission");
         assert_str(self.commission_bps(), commission_bps, "commission_bps");
     }
@@ -354,7 +415,11 @@ impl<B: AsRef<[u8]>> Matches<ys_st::Rewards> for lens_st::Rewards<B> {
             num_partitions,
         } = expected;
         assert_all(self.rewards(), rewards, "rewards");
-        assert_opt(self.num_partitions(), num_partitions.as_ref(), "num_partitions");
+        assert_opt(
+            self.num_partitions(),
+            num_partitions.as_ref(),
+            "num_partitions",
+        );
     }
 }
 
@@ -486,6 +551,285 @@ impl<B: AsRef<[u8]>> Matches<ys::SubscribeUpdateGossip> for lens::SubscribeUpdat
     }
 }
 
+/// Asserts that a lens map getter yields exactly the entries of a `prost` `HashMap<String, _>`.
+fn assert_map<'a, L: Matches<E>, E>(
+    lens: impl Iterator<Item = (Result<&'a str, core::str::Utf8Error>, L)>,
+    expected: &HashMap<String, E>,
+    field: &str,
+) {
+    let lens: Vec<(&str, L)> = lens.map(|(key, value)| (key.unwrap(), value)).collect();
+    assert_eq!(lens.len(), expected.len(), "{field}: entry count");
+    for (key, value) in &lens {
+        let expected = expected
+            .get(*key)
+            .unwrap_or_else(|| panic!("{field}: unexpected key {key:?}"));
+        value.assert_matches(expected);
+    }
+}
+
+impl<B: AsRef<[u8]>> Matches<ys::SubscribeRequest> for lens::SubscribeRequest<B> {
+    fn assert_matches(&self, expected: &ys::SubscribeRequest) {
+        let ys::SubscribeRequest {
+            accounts,
+            slots,
+            transactions,
+            transactions_status,
+            blocks,
+            blocks_meta,
+            entry,
+            commitment,
+            accounts_data_slice,
+            ping,
+            from_slot,
+            block_footer,
+        } = expected;
+        assert_map(self.accounts(), accounts, "accounts");
+        assert_map(self.slots(), slots, "slots");
+        assert_map(self.transactions(), transactions, "transactions");
+        assert_map(
+            self.transactions_status(),
+            transactions_status,
+            "transactions_status",
+        );
+        assert_map(self.blocks(), blocks, "blocks");
+        assert_map(self.blocks_meta(), blocks_meta, "blocks_meta");
+        assert_map(self.entry(), entry, "entry");
+        assert_eq!(
+            self.commitment().map(|c| c.to_i32()),
+            *commitment,
+            "commitment"
+        );
+        assert_all(
+            self.accounts_data_slice(),
+            accounts_data_slice,
+            "accounts_data_slice",
+        );
+        assert_opt(self.ping(), ping.as_ref(), "ping");
+        assert_eq!(self.from_slot(), *from_slot, "from_slot");
+        assert_map(self.block_footer(), block_footer, "block_footer");
+    }
+}
+
+impl<B: AsRef<[u8]>> Matches<ys::CuckooFilter> for lens::CuckooFilter<B> {
+    fn assert_matches(&self, expected: &ys::CuckooFilter) {
+        let ys::CuckooFilter {
+            data,
+            bucket_count,
+            entries_per_bucket,
+            fingerprint_bits,
+            hash_seed,
+            hash_algorithm,
+        } = expected;
+        assert_eq!(self.data(), data.as_slice(), "data");
+        assert_eq!(self.bucket_count(), *bucket_count);
+        assert_eq!(self.entries_per_bucket(), *entries_per_bucket);
+        assert_eq!(self.fingerprint_bits(), *fingerprint_bits);
+        assert_eq!(self.hash_seed(), *hash_seed);
+        assert_eq!(self.hash_algorithm().to_i32(), *hash_algorithm);
+    }
+}
+
+impl<B: AsRef<[u8]>> Matches<ys::SubscribeRequestFilterAccounts>
+    for lens::SubscribeRequestFilterAccounts<B>
+{
+    fn assert_matches(&self, expected: &ys::SubscribeRequestFilterAccounts) {
+        let ys::SubscribeRequestFilterAccounts {
+            account,
+            owner,
+            filters,
+            nonempty_txn_signature,
+            cuckoo_accounts_filter,
+        } = expected;
+        assert_strs(self.account(), account, "account");
+        assert_strs(self.owner(), owner, "owner");
+        assert_all(self.filters(), filters, "filters");
+        assert_eq!(self.nonempty_txn_signature(), *nonempty_txn_signature);
+        assert_opt(
+            self.cuckoo_accounts_filter(),
+            cuckoo_accounts_filter.as_ref(),
+            "cuckoo_accounts_filter",
+        );
+    }
+}
+
+impl<B: AsRef<[u8]>> Matches<ys::SubscribeRequestFilterAccountsFilter>
+    for lens::SubscribeRequestFilterAccountsFilter<B>
+{
+    fn assert_matches(&self, expected: &ys::SubscribeRequestFilterAccountsFilter) {
+        use lens::subscribe_request_filter_accounts_filter::Filter as L;
+        use ys::subscribe_request_filter_accounts_filter::Filter as E;
+        let ys::SubscribeRequestFilterAccountsFilter { filter } = expected;
+        match (self.filter(), filter) {
+            (None, None) => {}
+            (Some(L::Memcmp(lens)), Some(E::Memcmp(expected))) => lens.assert_matches(expected),
+            (Some(L::Datasize(lens)), Some(E::Datasize(expected))) => assert_eq!(lens, *expected),
+            (Some(L::TokenAccountState(lens)), Some(E::TokenAccountState(expected))) => {
+                assert_eq!(lens, *expected)
+            }
+            (Some(L::Lamports(lens)), Some(E::Lamports(expected))) => lens.assert_matches(expected),
+            _ => panic!("filter: oneof mismatch"),
+        }
+    }
+}
+
+impl<B: AsRef<[u8]>> Matches<ys::SubscribeRequestFilterAccountsFilterMemcmp>
+    for lens::SubscribeRequestFilterAccountsFilterMemcmp<B>
+{
+    fn assert_matches(&self, expected: &ys::SubscribeRequestFilterAccountsFilterMemcmp) {
+        use lens::subscribe_request_filter_accounts_filter_memcmp::Data as L;
+        use ys::subscribe_request_filter_accounts_filter_memcmp::Data as E;
+        let ys::SubscribeRequestFilterAccountsFilterMemcmp { offset, data } = expected;
+        assert_eq!(self.offset(), *offset, "offset");
+        match (self.data(), data) {
+            (None, None) => {}
+            (Some(L::Bytes(lens)), Some(E::Bytes(expected))) => {
+                assert_eq!(lens, expected.as_slice())
+            }
+            (Some(L::Base58(lens)), Some(E::Base58(expected))) => {
+                assert_eq!(lens.unwrap(), expected)
+            }
+            (Some(L::Base64(lens)), Some(E::Base64(expected))) => {
+                assert_eq!(lens.unwrap(), expected)
+            }
+            _ => panic!("data: oneof mismatch"),
+        }
+    }
+}
+
+impl<B: AsRef<[u8]>> Matches<ys::SubscribeRequestFilterAccountsFilterLamports>
+    for lens::SubscribeRequestFilterAccountsFilterLamports<B>
+{
+    fn assert_matches(&self, expected: &ys::SubscribeRequestFilterAccountsFilterLamports) {
+        use lens::subscribe_request_filter_accounts_filter_lamports::Cmp as L;
+        use ys::subscribe_request_filter_accounts_filter_lamports::Cmp as E;
+        let ys::SubscribeRequestFilterAccountsFilterLamports { cmp } = expected;
+        match (self.cmp(), cmp) {
+            (None, None) => {}
+            (Some(L::Eq(lens)), Some(E::Eq(expected)))
+            | (Some(L::Ne(lens)), Some(E::Ne(expected)))
+            | (Some(L::Lt(lens)), Some(E::Lt(expected)))
+            | (Some(L::Gt(lens)), Some(E::Gt(expected))) => assert_eq!(lens, *expected),
+            _ => panic!("cmp: oneof mismatch"),
+        }
+    }
+}
+
+impl<B: AsRef<[u8]>> Matches<ys::SubscribeRequestFilterSlots>
+    for lens::SubscribeRequestFilterSlots<B>
+{
+    fn assert_matches(&self, expected: &ys::SubscribeRequestFilterSlots) {
+        let ys::SubscribeRequestFilterSlots {
+            filter_by_commitment,
+            interslot_updates,
+        } = expected;
+        assert_eq!(self.filter_by_commitment(), *filter_by_commitment);
+        assert_eq!(self.interslot_updates(), *interslot_updates);
+    }
+}
+
+impl<B: AsRef<[u8]>> Matches<ys::SubscribeRequestFilterTransactions>
+    for lens::SubscribeRequestFilterTransactions<B>
+{
+    fn assert_matches(&self, expected: &ys::SubscribeRequestFilterTransactions) {
+        let ys::SubscribeRequestFilterTransactions {
+            vote,
+            failed,
+            signature,
+            account_include,
+            account_exclude,
+            account_required,
+            cuckoo_account_include,
+            token_accounts,
+        } = expected;
+        assert_eq!(self.vote(), *vote, "vote");
+        assert_eq!(self.failed(), *failed, "failed");
+        assert_opt_str(self.signature(), signature, "signature");
+        assert_strs(self.account_include(), account_include, "account_include");
+        assert_strs(self.account_exclude(), account_exclude, "account_exclude");
+        assert_strs(
+            self.account_required(),
+            account_required,
+            "account_required",
+        );
+        assert_opt(
+            self.cuckoo_account_include(),
+            cuckoo_account_include.as_ref(),
+            "cuckoo_account_include",
+        );
+        assert_eq!(self.token_accounts().map(|t| t.to_i32()), *token_accounts);
+    }
+}
+
+impl<B: AsRef<[u8]>> Matches<ys::SubscribeRequestFilterBlocks>
+    for lens::SubscribeRequestFilterBlocks<B>
+{
+    fn assert_matches(&self, expected: &ys::SubscribeRequestFilterBlocks) {
+        let ys::SubscribeRequestFilterBlocks {
+            account_include,
+            include_transactions,
+            include_accounts,
+            include_entries,
+            cuckoo_account_include,
+        } = expected;
+        assert_strs(self.account_include(), account_include, "account_include");
+        assert_eq!(self.include_transactions(), *include_transactions);
+        assert_eq!(self.include_accounts(), *include_accounts);
+        assert_eq!(self.include_entries(), *include_entries);
+        assert_opt(
+            self.cuckoo_account_include(),
+            cuckoo_account_include.as_ref(),
+            "cuckoo_account_include",
+        );
+    }
+}
+
+impl<B: AsRef<[u8]>> Matches<ys::SubscribeRequestFilterBlocksMeta>
+    for lens::SubscribeRequestFilterBlocksMeta<B>
+{
+    fn assert_matches(&self, expected: &ys::SubscribeRequestFilterBlocksMeta) {
+        let ys::SubscribeRequestFilterBlocksMeta {} = expected;
+    }
+}
+
+impl<B: AsRef<[u8]>> Matches<ys::SubscribeRequestFilterEntry>
+    for lens::SubscribeRequestFilterEntry<B>
+{
+    fn assert_matches(&self, expected: &ys::SubscribeRequestFilterEntry) {
+        let ys::SubscribeRequestFilterEntry {
+            include_update_parent,
+        } = expected;
+        assert_eq!(self.include_update_parent(), *include_update_parent);
+    }
+}
+
+impl<B: AsRef<[u8]>> Matches<ys::SubscribeRequestFilterBlockFooter>
+    for lens::SubscribeRequestFilterBlockFooter<B>
+{
+    fn assert_matches(&self, expected: &ys::SubscribeRequestFilterBlockFooter) {
+        let ys::SubscribeRequestFilterBlockFooter {
+            include_certificates,
+        } = expected;
+        assert_eq!(self.include_certificates(), *include_certificates);
+    }
+}
+
+impl<B: AsRef<[u8]>> Matches<ys::SubscribeRequestAccountsDataSlice>
+    for lens::SubscribeRequestAccountsDataSlice<B>
+{
+    fn assert_matches(&self, expected: &ys::SubscribeRequestAccountsDataSlice) {
+        let ys::SubscribeRequestAccountsDataSlice { offset, length } = expected;
+        assert_eq!(self.offset(), *offset, "offset");
+        assert_eq!(self.length(), *length, "length");
+    }
+}
+
+impl<B: AsRef<[u8]>> Matches<ys::SubscribeRequestPing> for lens::SubscribeRequestPing<B> {
+    fn assert_matches(&self, expected: &ys::SubscribeRequestPing) {
+        let ys::SubscribeRequestPing { id } = expected;
+        assert_eq!(self.id(), *id, "id");
+    }
+}
+
 impl<B: AsRef<[u8]>> Matches<ys::SubscribeUpdateAccount> for lens::SubscribeUpdateAccount<B> {
     fn assert_matches(&self, expected: &ys::SubscribeUpdateAccount) {
         let ys::SubscribeUpdateAccount {
@@ -522,7 +866,11 @@ impl<B: AsRef<[u8]>> Matches<ys::SubscribeUpdateAccountInfo>
         assert_eq!(self.rent_epoch(), *rent_epoch, "rent_epoch");
         assert_eq!(self.data(), data.as_slice(), "data");
         assert_eq!(self.write_version(), *write_version, "write_version");
-        assert_eq!(self.txn_signature(), txn_signature.as_deref(), "txn_signature");
+        assert_eq!(
+            self.txn_signature(),
+            txn_signature.as_deref(),
+            "txn_signature"
+        );
     }
 }
 
@@ -531,12 +879,13 @@ impl<B: AsRef<[u8]>> Matches<ys::SubscribeUpdateSlot> for lens::SubscribeUpdateS
         let ys::SubscribeUpdateSlot {
             slot,
             parent,
-            status: _, // enum; dropped from the fixture proto
+            status,
             dead_error,
             bank_id,
         } = expected;
         assert_eq!(self.slot(), *slot, "slot");
         assert_eq!(self.parent(), *parent, "parent");
+        assert_eq!(self.status().to_i32(), *status, "status");
         assert_opt_str(self.dead_error(), dead_error, "dead_error");
         assert_eq!(self.bank_id(), *bank_id, "bank_id");
     }
@@ -621,8 +970,15 @@ impl<B: AsRef<[u8]>> Matches<ys::SubscribeUpdateBlock> for lens::SubscribeUpdate
         assert_opt(self.block_time(), block_time.as_ref(), "block_time");
         assert_opt(self.block_height(), block_height.as_ref(), "block_height");
         assert_eq!(self.parent_slot(), *parent_slot, "parent_slot");
-        assert_str(self.parent_blockhash(), parent_blockhash, "parent_blockhash");
-        assert_eq!(self.executed_transaction_count(), *executed_transaction_count);
+        assert_str(
+            self.parent_blockhash(),
+            parent_blockhash,
+            "parent_blockhash",
+        );
+        assert_eq!(
+            self.executed_transaction_count(),
+            *executed_transaction_count
+        );
         assert_all(self.transactions(), transactions, "transactions");
         assert_eq!(self.updated_account_count(), *updated_account_count);
         assert_all(self.accounts(), accounts, "accounts");
@@ -652,8 +1008,15 @@ impl<B: AsRef<[u8]>> Matches<ys::SubscribeUpdateBlockMeta> for lens::SubscribeUp
         assert_opt(self.block_time(), block_time.as_ref(), "block_time");
         assert_opt(self.block_height(), block_height.as_ref(), "block_height");
         assert_eq!(self.parent_slot(), *parent_slot, "parent_slot");
-        assert_str(self.parent_blockhash(), parent_blockhash, "parent_blockhash");
-        assert_eq!(self.executed_transaction_count(), *executed_transaction_count);
+        assert_str(
+            self.parent_blockhash(),
+            parent_blockhash,
+            "parent_blockhash",
+        );
+        assert_eq!(
+            self.executed_transaction_count(),
+            *executed_transaction_count
+        );
         assert_eq!(self.entries_count(), *entries_count, "entries_count");
         assert_eq!(self.bank_id(), *bank_id, "bank_id");
     }
@@ -699,8 +1062,14 @@ impl<B: AsRef<[u8]>> Matches<ys::SubscribeUpdateEntry> for lens::SubscribeUpdate
         assert_eq!(self.index(), *index, "index");
         assert_eq!(self.num_hashes(), *num_hashes, "num_hashes");
         assert_eq!(self.hash(), hash.as_slice(), "hash");
-        assert_eq!(self.executed_transaction_count(), *executed_transaction_count);
-        assert_eq!(self.starting_transaction_index(), *starting_transaction_index);
+        assert_eq!(
+            self.executed_transaction_count(),
+            *executed_transaction_count
+        );
+        assert_eq!(
+            self.starting_transaction_index(),
+            *starting_transaction_index
+        );
         assert_eq!(self.bank_id(), *bank_id, "bank_id");
     }
 }
@@ -746,7 +1115,10 @@ impl<B: AsRef<[u8]>> Matches<ys::SubscribeUpdateDeshredUpdateParent>
             parent_block_id,
         } = expected;
         assert_eq!(self.slot(), *slot, "slot");
-        assert_eq!(self.update_parent_fec_set_index(), *update_parent_fec_set_index);
+        assert_eq!(
+            self.update_parent_fec_set_index(),
+            *update_parent_fec_set_index
+        );
         assert_eq!(self.parent_slot(), *parent_slot, "parent_slot");
         assert_eq!(self.parent_block_id(), parent_block_id.as_slice());
     }
@@ -846,13 +1218,25 @@ impl<B: AsRef<[u8]>> Matches<ys::SubscribeUpdateContactInfoNode>
         assert_eq!(self.version_client_id(), *version_client_id);
         assert_opt_str(self.gossip(), gossip, "gossip");
         assert_opt_str(self.tpu_quic(), tpu_quic, "tpu_quic");
-        assert_opt_str(self.tpu_forwards_quic(), tpu_forwards_quic, "tpu_forwards_quic");
+        assert_opt_str(
+            self.tpu_forwards_quic(),
+            tpu_forwards_quic,
+            "tpu_forwards_quic",
+        );
         assert_opt_str(self.tpu_vote_udp(), tpu_vote_udp, "tpu_vote_udp");
         assert_opt_str(self.tpu_vote_quic(), tpu_vote_quic, "tpu_vote_quic");
         assert_opt_str(self.tvu_udp(), tvu_udp, "tvu_udp");
         assert_opt_str(self.tvu_quic(), tvu_quic, "tvu_quic");
-        assert_opt_str(self.serve_repair_udp(), serve_repair_udp, "serve_repair_udp");
-        assert_opt_str(self.serve_repair_quic(), serve_repair_quic, "serve_repair_quic");
+        assert_opt_str(
+            self.serve_repair_udp(),
+            serve_repair_udp,
+            "serve_repair_udp",
+        );
+        assert_opt_str(
+            self.serve_repair_quic(),
+            serve_repair_quic,
+            "serve_repair_quic",
+        );
         assert_opt_str(self.rpc(), rpc, "rpc");
         assert_opt_str(self.rpc_pubsub(), rpc_pubsub, "rpc_pubsub");
         assert_opt_str(self.alpenglow(), alpenglow, "alpenglow");
@@ -1136,12 +1520,7 @@ fn subscribe_update_transaction() {
 
 #[test]
 fn subscribe_update_transaction_status() {
-    for err in [
-        None,
-        Some(ys_st::TransactionError {
-            err: vec![1, 2, 3],
-        }),
-    ] {
+    for err in [None, Some(ys_st::TransactionError { err: vec![1, 2, 3] })] {
         round_trip!(
             lens::SubscribeUpdateTransactionStatus<&[u8]>,
             ys::SubscribeUpdateTransactionStatus {
@@ -1230,7 +1609,10 @@ fn subscribe_update_entry_and_update_parent() {
 #[test]
 fn subscribe_update_ping_and_pong() {
     round_trip!(lens::SubscribeUpdatePing<&[u8]>, ys::SubscribeUpdatePing {});
-    round_trip!(lens::SubscribeUpdatePong<&[u8]>, ys::SubscribeUpdatePong { id: -3 });
+    round_trip!(
+        lens::SubscribeUpdatePong<&[u8]>,
+        ys::SubscribeUpdatePong { id: -3 }
+    );
 }
 
 #[test]
@@ -1266,7 +1648,11 @@ fn gossip_topology_and_contact_info() {
     round_trip!(
         lens::GossipTopology<&[u8]>,
         ys::GossipTopology {
-            nodes: vec![contact_info(1, true), contact_info(2, false), contact_info(3, true)],
+            nodes: vec![
+                contact_info(1, true),
+                contact_info(2, false),
+                contact_info(3, true)
+            ],
         }
     );
     round_trip!(
@@ -1311,7 +1697,10 @@ fn empty_messages_decode_to_defaults() {
         lens::SubscribeUpdateAccount<&[u8]>,
         ys::SubscribeUpdateAccount::default()
     );
-    round_trip!(lens_st::ConfirmedBlock<&[u8]>, ys_st::ConfirmedBlock::default());
+    round_trip!(
+        lens_st::ConfirmedBlock<&[u8]>,
+        ys_st::ConfirmedBlock::default()
+    );
     round_trip!(
         lens::SubscribeUpdateContactInfoNode<&[u8]>,
         ys::SubscribeUpdateContactInfoNode::default()
@@ -1483,4 +1872,186 @@ fn subscribe_update_gossip_envelope_every_variant() {
         lens::SubscribeUpdateGossip<&[u8]>,
         ys::SubscribeUpdateGossip::default()
     );
+}
+
+fn cuckoo() -> ys::CuckooFilter {
+    ys::CuckooFilter {
+        data: vec![0xab; 64],
+        bucket_count: 16,
+        entries_per_bucket: 4,
+        fingerprint_bits: 12,
+        hash_seed: 0x5eed,
+        hash_algorithm: ys::CuckooHashAlgorithm::SipHash as i32,
+    }
+}
+
+fn named<T>(entries: impl IntoIterator<Item = (&'static str, T)>) -> HashMap<String, T> {
+    entries
+        .into_iter()
+        .map(|(name, value)| (name.to_owned(), value))
+        .collect()
+}
+
+#[test]
+fn subscribe_request_with_every_filter() {
+    use ys::subscribe_request_filter_accounts_filter::Filter;
+    use ys::subscribe_request_filter_accounts_filter_lamports::Cmp;
+    use ys::subscribe_request_filter_accounts_filter_memcmp::Data;
+
+    let memcmp = |offset, data| ys::SubscribeRequestFilterAccountsFilter {
+        filter: Some(Filter::Memcmp(
+            ys::SubscribeRequestFilterAccountsFilterMemcmp {
+                offset,
+                data: Some(data),
+            },
+        )),
+    };
+    let lamports = |cmp| ys::SubscribeRequestFilterAccountsFilter {
+        filter: Some(Filter::Lamports(
+            ys::SubscribeRequestFilterAccountsFilterLamports { cmp: Some(cmp) },
+        )),
+    };
+    let transactions = |vote, token_accounts: Option<ys::TokenAccountExpansionControlFlag>| {
+        ys::SubscribeRequestFilterTransactions {
+            vote,
+            failed: Some(false),
+            signature: None,
+            account_include: vec!["include".to_owned()],
+            account_exclude: vec![],
+            account_required: vec!["required-a".to_owned(), "required-b".to_owned()],
+            cuckoo_account_include: vote.is_some().then(cuckoo),
+            token_accounts: token_accounts.map(|t| t as i32),
+        }
+    };
+
+    round_trip!(
+        lens::SubscribeRequest<&[u8]>,
+        ys::SubscribeRequest {
+            accounts: named([
+                (
+                    "tokens",
+                    ys::SubscribeRequestFilterAccounts {
+                        account: vec![],
+                        owner: vec!["TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA".to_owned()],
+                        filters: vec![
+                            ys::SubscribeRequestFilterAccountsFilter {
+                                filter: Some(Filter::Datasize(165)),
+                            },
+                            ys::SubscribeRequestFilterAccountsFilter {
+                                filter: Some(Filter::TokenAccountState(true)),
+                            },
+                            memcmp(32, Data::Bytes(pubkey(7))),
+                            memcmp(
+                                0,
+                                Data::Base58("11111111111111111111111111111111".to_owned())
+                            ),
+                            memcmp(8, Data::Base64("AAEC".to_owned())),
+                            lamports(Cmp::Gt(1_000_000)),
+                            lamports(Cmp::Eq(0)),
+                            ys::SubscribeRequestFilterAccountsFilter { filter: None },
+                        ],
+                        nonempty_txn_signature: Some(true),
+                        cuckoo_accounts_filter: Some(cuckoo()),
+                    },
+                ),
+                (
+                    "",
+                    ys::SubscribeRequestFilterAccounts {
+                        account: vec!["a".to_owned(), "b".to_owned()],
+                        ..Default::default()
+                    },
+                ),
+            ]),
+            slots: named([(
+                "slots",
+                ys::SubscribeRequestFilterSlots {
+                    filter_by_commitment: Some(true),
+                    interslot_updates: None,
+                },
+            )]),
+            transactions: named([
+                (
+                    "non-vote",
+                    transactions(
+                        Some(false),
+                        Some(ys::TokenAccountExpansionControlFlag::BalanceChanged),
+                    ),
+                ),
+                ("all", transactions(None, None)),
+            ]),
+            transactions_status: named([(
+                "status",
+                transactions(Some(true), Some(ys::TokenAccountExpansionControlFlag::All)),
+            )]),
+            blocks: named([(
+                "blocks",
+                ys::SubscribeRequestFilterBlocks {
+                    account_include: vec!["vote111".to_owned()],
+                    include_transactions: Some(true),
+                    include_accounts: Some(false),
+                    include_entries: None,
+                    cuckoo_account_include: Some(cuckoo()),
+                },
+            )]),
+            blocks_meta: named([("meta", ys::SubscribeRequestFilterBlocksMeta {})]),
+            entry: named([(
+                "entries",
+                ys::SubscribeRequestFilterEntry {
+                    include_update_parent: Some(true),
+                },
+            )]),
+            commitment: Some(ys::CommitmentLevel::Confirmed as i32),
+            accounts_data_slice: vec![
+                ys::SubscribeRequestAccountsDataSlice {
+                    offset: 0,
+                    length: 32,
+                },
+                ys::SubscribeRequestAccountsDataSlice {
+                    offset: 64,
+                    length: 8,
+                },
+            ],
+            ping: Some(ys::SubscribeRequestPing { id: 3 }),
+            from_slot: Some(300_000_000),
+            block_footer: named([(
+                "footer",
+                ys::SubscribeRequestFilterBlockFooter {
+                    include_certificates: Some(false),
+                },
+            )]),
+        }
+    );
+    round_trip!(
+        lens::SubscribeRequest<&[u8]>,
+        ys::SubscribeRequest::default()
+    );
+}
+
+#[test]
+fn enum_fields_decode_to_their_variants() {
+    let bytes = ys::SubscribeUpdateSlot {
+        slot: 1,
+        status: ys::SlotStatus::SlotDead as i32,
+        ..Default::default()
+    }
+    .encode_to_vec();
+    let slot = lens::SubscribeUpdateSlot::parse(bytes.as_slice()).unwrap();
+    assert_eq!(slot.status(), lens::SlotStatus::SlotDead);
+
+    let bytes = ys_st::Reward {
+        reward_type: ys_st::RewardType::VatDebit as i32,
+        ..Default::default()
+    }
+    .encode_to_vec();
+    let reward = lens_st::Reward::parse(bytes.as_slice()).unwrap();
+    assert_eq!(reward.reward_type(), lens_st::RewardType::VatDebit);
+
+    // A status newer than this schema is kept, not folded into a known one.
+    let bytes = ys::SubscribeUpdateSlot {
+        status: 99,
+        ..Default::default()
+    }
+    .encode_to_vec();
+    let slot = lens::SubscribeUpdateSlot::parse(bytes.as_slice()).unwrap();
+    assert_eq!(slot.status(), lens::SlotStatus::Unknown(99));
 }
