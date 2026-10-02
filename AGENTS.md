@@ -20,7 +20,8 @@ sit next to prost-generated types for the same schema.
 | `crates/protoview-build` | The generator. `protox` parses `.proto` files → `model.rs` resolves them → `codegen.rs` renders one Rust file per proto package. `naming.rs` holds the prost-compatible naming rules. |
 | `crates/protoview-tests` | Unpublished. Generates code from the fixtures and tests it end to end. The only way to catch generated code that does not compile. |
 | `crates/geyser-index-bench` | CLI that subscribes to Yellowstone gRPC and times view indexing of live `SubscribeUpdate`s against `prost`. Reads `GRPC_ENDPOINT` and `X_TOKEN` from the environment or `.env` (see `.env.example`). |
-| `proto/yellowstone/` | **Verbatim** copies of `yellowstone-grpc-proto` 13.0.0's protos, shared by `protoview-tests` and the bench. Do not edit them: tests compare against that crate's prost types. |
+| `crates/yellowstone-grpc-protoview` | Reusable (publishable) crate: views generated from the yellowstone protos plus `RawUpdateCodec` (tonic codec yielding each frame as raw `Bytes`) and `GeyserClient` (`subscribe` → parsed `GeyserStream`, `subscribe_raw` → raw frames; behind the default `client` feature). The bench uses `subscribe_raw` so it can time parsing itself. The `protoview-client` bin (feature `cli`, off by default) prints a summary line per update: `cargo run -p yellowstone-grpc-protoview --features cli --bin protoview-client`. |
+| `crates/yellowstone-grpc-protoview/proto/` | **Verbatim** copies of `yellowstone-grpc-proto` 13.0.0's protos, also used by `protoview-tests`. Do not edit them: tests compare against that crate's prost types. |
 | `crates/protoview-tests/proto/` | Hand-written fixtures (`nested`, `repeated`, `all_types`, `oneof`, `enums`, `maps`, `fixed_bytes`; the last is configured in `build.rs`) plus `fumarole.proto`. The `geyser.proto` / `solana-storage.proto` here are an **older, unused** yellowstone version, shadowed by include order (see below). |
 | `docs/design.md` | Design decisions and their reasons. Update it when behaviour changes. |
 
@@ -106,7 +107,7 @@ Changes to codegen or the runtime must preserve these:
   packed runs, duplicate map keys, entries missing key or value, last-wins across oneof
   members, malformed nested messages, wrong wire types.
 - After adding a test that passes first time, **mutate the fixture** (e.g. renumber a field)
-  and confirm the test fails, then restore it. For `proto/yellowstone/`, restore from the
+  and confirm the test fails, then restore it. For `crates/yellowstone-grpc-protoview/proto/`, restore from the
   cargo registry copy so the files stay verbatim.
 
 ## Gotchas
@@ -115,10 +116,10 @@ Changes to codegen or the runtime must preserve these:
   `crates/protoview-tests/src/readme_tests.rs` is copied verbatim into `README.md`, and the
   README's schema is `crates/protoview-tests/proto/shop/`. Change them together.
 
-- **Include order matters** in `crates/protoview-tests/build.rs`: `../../proto/yellowstone` comes
+- **Include order matters** in `crates/protoview-tests/build.rs`: `../yellowstone-grpc-protoview/proto` comes
   before `proto`, so `fumarole.proto`'s `import "geyser.proto"` resolves to 13.0.0, not the
   stale copy in `crates/protoview-tests/proto/`.
-- **Build scripts reading `../../proto`** must emit `cargo:rerun-if-changed` for it (and for
+- **Build scripts reading another crate's `proto/`** must emit `cargo:rerun-if-changed` for it (and for
   everything else they read, since emitting any disables cargo's default tracking).
 - `OUT_DIR` can hold stale files from older layouts (e.g. `protoview_build.rs`); they are
   harmless and not included.

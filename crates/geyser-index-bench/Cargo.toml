@@ -19,6 +19,4 @@ tokio = { workspace = true }
 tokio-stream = { workspace = true }
 tonic = { workspace = true }
 yellowstone-grpc-proto = { workspace = true }
-
-[build-dependencies]
-protoview-build = { workspace = true }
+yellowstone-grpc-protoview = { workspace = true }

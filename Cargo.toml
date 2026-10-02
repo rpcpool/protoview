@@ -18,7 +18,8 @@ tokio-stream = "0.1.17"
 tonic = { version = "0.14.6", default-features = false, features = ["channel", "codegen", "tls-ring", "tls-native-roots", "tls-webpki-roots"] }
 protoview = { path = "crates/protoview" }
 protoview-build = { path = "crates/protoview-build" }
+yellowstone-grpc-protoview = { path = "crates/yellowstone-grpc-protoview" }
 prost = "0.14.4"
 prost-types = "0.14.4"
 protox = "0.9.1"
-yellowstone-grpc-proto = { version = "=13.0.0", default-features = false }
+yellowstone-grpc-proto = { version = "13.0.0", default-features = false }

@@ -1,6 +1,6 @@
 //! A tonic [`Codec`] that encodes `SubscribeRequest`s with `prost` but hands incoming
-//! messages back as the raw [`Bytes`] of each gRPC frame, so the benchmark can time
-//! decoding itself instead of receiving an already-decoded message.
+//! messages back as the raw [`Bytes`] of each gRPC frame, so callers can parse them into
+//! views (or decode them however they like) instead of receiving an already-decoded message.
 
 use bytes::{Buf, Bytes};
 use prost::Message as _;
@@ -77,8 +77,7 @@ impl Decoder for RawDecoder {
     /// Takes the whole frame out of the receive buffer.
     ///
     /// Tonic's [`DecodeBuf`] is backed by a `BytesMut`, so this splits the buffer rather
-    /// than copying it: the benchmark then times decoding on the same allocation tonic
-    /// received the frame into.
+    /// than copying it: the caller reads the same allocation tonic received the frame into.
     ///
     /// # Arguments
     ///
