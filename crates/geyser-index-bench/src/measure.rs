@@ -1,15 +1,15 @@
-//! Timing one incoming update: indexing it with the generated lens, and optionally
+//! Timing one incoming update: indexing it with the generated view, and optionally
 //! decoding it with `prost` for comparison.
 
 use std::hint::black_box;
 use std::time::Instant;
 
 use prost::Message as _;
-use proto_codec::DecodeError;
+use protoview::DecodeError;
 use yellowstone_grpc_proto::geyser as ys;
 
-use crate::lens::geyser::SubscribeUpdate;
-use crate::lens::geyser::subscribe_update::UpdateOneof;
+use crate::view::geyser::SubscribeUpdate;
+use crate::view::geyser::subscribe_update::UpdateOneof;
 
 /// Which member of `SubscribeUpdate`'s `update_oneof` an update carries.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -79,7 +79,7 @@ impl UpdateKind {
 
     /// Determines which member an indexed update carries.
     ///
-    /// Reading the member builds its lens, which re-indexes that member's own fields, so
+    /// Reading the member builds its view, which re-indexes that member's own fields, so
     /// this runs outside the timed region.
     ///
     /// # Arguments
@@ -115,7 +115,7 @@ pub struct Sample {
     /// Encoded size in bytes.
     pub size: usize,
     /// Nanoseconds for [`SubscribeUpdate::parse`], averaged over the repeat count.
-    pub lens_ns: u64,
+    pub view_ns: u64,
     /// Nanoseconds for a `prost` decode plus drop, averaged likewise, when enabled.
     pub prost_ns: Option<u64>,
 }
@@ -158,7 +158,7 @@ impl Timer {
 
     /// Times one update.
     ///
-    /// The lens is timed first, on bytes just received from the network, so with a repeat
+    /// The view is timed first, on bytes just received from the network, so with a repeat
     /// count of `1` it pays the cold-cache cost and `prost` then runs on warm bytes — a
     /// bias in `prost`'s favour.
     ///
@@ -180,7 +180,7 @@ impl Timer {
         for _ in 1..self.repeat {
             black_box(SubscribeUpdate::parse(black_box(bytes))?);
         }
-        let lens_ns = mean_ns(start, self.repeat);
+        let view_ns = mean_ns(start, self.repeat);
 
         let prost_ns = self.compare_prost.then(|| {
             let start = Instant::now();
@@ -194,7 +194,7 @@ impl Timer {
         Ok(Sample {
             kind: UpdateKind::of(&update),
             size: bytes.len(),
-            lens_ns,
+            view_ns,
             prost_ns,
         })
     }

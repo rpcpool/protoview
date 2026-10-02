@@ -4,6 +4,9 @@ members = ["crates/*"]
 
 [workspace.package]
 edition = "2024"
+authors = ["Louis-Vincent <louis-vincent@triton.one>"]
+license = "Apache-2.0"
+readme = "README.md"
 
 [workspace.dependencies]
 bytes = "1.10"
@@ -13,8 +16,8 @@ thiserror = "2.0"
 tokio = { version = "1.47", features = ["rt-multi-thread", "macros", "signal", "sync", "time"] }
 tokio-stream = "0.1.17"
 tonic = { version = "0.14.6", default-features = false, features = ["channel", "codegen", "tls-ring", "tls-native-roots", "tls-webpki-roots"] }
-proto-codec = { path = "crates/proto-codec" }
-proto-codec-gen = { path = "crates/proto-codec-gen" }
+protoview = { path = "crates/protoview" }
+protoview-build = { path = "crates/protoview-build" }
 prost = "0.14.4"
 prost-types = "0.14.4"
 protox = "0.9.1"

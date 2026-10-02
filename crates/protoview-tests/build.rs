@@ -5,11 +5,17 @@ fn main() {
     println!("cargo:rerun-if-changed=proto");
     println!("cargo:rerun-if-changed=../../proto");
 
-    proto_codec_gen::Config::new()
+    protoview_build::Config::new()
         // First, so `import "geyser.proto"` in fumarole.proto resolves to yellowstone
         // 13.0.0 rather than the older copy in proto/.
         .include("../../proto/yellowstone")
         .include("proto")
+        .fixed_bytes(".fixtures.fixed.Account.pubkey", 32)
+        .fixed_bytes(".fixtures.fixed.Account.signature", 64)
+        .fixed_bytes(".fixtures.fixed.Account.history", 32)
+        .fixed_bytes("fixtures.fixed.Account.hash", 8) // leading `.` is optional
+        .fixed_bytes(".fixtures.fixed.Account.Owner.key", 16)
+        .fixed_bytes(".shop.orders.Order.customer_id", 16)
         .compile(&[
             "proto/nested.proto",
             "proto/repeated.proto",
@@ -17,6 +23,8 @@ fn main() {
             "proto/oneof.proto",
             "proto/enums.proto",
             "proto/maps.proto",
+            "proto/fixed_bytes.proto",
+            "proto/shop/orders.proto",
             "../../proto/yellowstone/geyser.proto",
             "proto/fumarole.proto",
         ])

@@ -1,0 +1,32 @@
+// The README's example schema, part 2. Kept here so the README's code is compiled and
+// tested; keep the two in sync.
+syntax = "proto3";
+
+package shop.orders;
+
+import "shop/common.proto";
+
+enum Status {
+    STATUS_UNSPECIFIED = 0;
+    STATUS_PENDING = 1;
+    STATUS_SHIPPED = 2;
+}
+
+message LineItem {
+    string sku = 1;
+    uint32 quantity = 2;
+    shop.common.Money price = 3;
+}
+
+message Order {
+    uint64 id = 1;
+    bytes customer_id = 2;  // a 16-byte UUID: configured with fixed_bytes
+    Status status = 3;
+    repeated LineItem items = 4;
+    map<string, string> tags = 5;
+    optional string note = 6;
+    oneof delivery {
+        shop.common.Address address = 7;
+        string pickup_point = 8;
+    }
+}

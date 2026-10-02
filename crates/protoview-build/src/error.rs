@@ -25,6 +25,13 @@ pub enum Error {
         field: String,
         type_name: String,
     },
+    /// A `fixed_bytes` configuration does not apply to a field it can describe.
+    InvalidFixedBytes {
+        /// The configured field path, e.g. `.geyser.SubscribeUpdateAccountInfo.pubkey`.
+        path: String,
+        /// Why it was refused.
+        reason: &'static str,
+    },
     /// Writing generated source to disk failed.
     Io {
         path: PathBuf,
@@ -49,6 +56,7 @@ impl fmt::Display for Error {
                 f,
                 "{message}.{field}: type {type_name} was not found among the compiled files"
             ),
+            Self::InvalidFixedBytes { path, reason } => write!(f, "fixed_bytes {path}: {reason}"),
             Self::Io { path, source } => write!(f, "writing {}: {source}", path.display()),
         }
     }

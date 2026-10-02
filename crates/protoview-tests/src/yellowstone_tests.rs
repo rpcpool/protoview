@@ -1,5 +1,5 @@
 //! Messages encoded by `yellowstone-grpc-proto` 13.0.0's `prost` types, decoded by the
-//! lenses generated from verbatim copies of its protos in `proto/yellowstone/`.
+//! views generated from verbatim copies of its protos in `proto/yellowstone/`.
 //!
 //! Every check destructures the yellowstone struct exhaustively, so a field that is not
 //! asserted is a compile error rather than a silent gap.
@@ -13,68 +13,68 @@ use yellowstone_grpc_proto::solana::storage::confirmed_block as ys_st;
 use yellowstone_grpc_proto::geyser::subscribe_update::UpdateOneof;
 use yellowstone_grpc_proto::prost_types;
 
-use crate::geyser as lens;
-use crate::google::protobuf as lens_pb;
-use crate::solana::storage::confirmed_block as lens_st;
+use crate::geyser as view;
+use crate::google::protobuf as view_pb;
+use crate::solana::storage::confirmed_block as view_st;
 
-/// A lens that can be checked field by field against the `prost` value it was encoded
+/// A view that can be checked field by field against the `prost` value it was encoded
 /// from.
 trait Matches<E> {
     fn assert_matches(&self, expected: &E);
 }
 
-fn assert_opt<L: Matches<E>, E>(lens: Option<L>, expected: Option<&E>, field: &str) {
-    match (lens, expected) {
-        (Some(lens), Some(expected)) => lens.assert_matches(expected),
+fn assert_opt<L: Matches<E>, E>(view: Option<L>, expected: Option<&E>, field: &str) {
+    match (view, expected) {
+        (Some(view), Some(expected)) => view.assert_matches(expected),
         (None, None) => {}
-        (lens, expected) => panic!(
-            "{field}: presence mismatch, lens {} vs expected {}",
-            lens.is_some(),
+        (view, expected) => panic!(
+            "{field}: presence mismatch, view {} vs expected {}",
+            view.is_some(),
             expected.is_some()
         ),
     }
 }
 
-fn assert_all<L: Matches<E>, E>(lens: impl Iterator<Item = L>, expected: &[E], field: &str) {
-    let lens: Vec<L> = lens.collect();
-    assert_eq!(lens.len(), expected.len(), "{field}: element count");
-    for (lens, expected) in lens.iter().zip(expected) {
-        lens.assert_matches(expected);
+fn assert_all<L: Matches<E>, E>(view: impl Iterator<Item = L>, expected: &[E], field: &str) {
+    let view: Vec<L> = view.collect();
+    assert_eq!(view.len(), expected.len(), "{field}: element count");
+    for (view, expected) in view.iter().zip(expected) {
+        view.assert_matches(expected);
     }
 }
 
-fn assert_str(lens: Result<&str, core::str::Utf8Error>, expected: &str, field: &str) {
-    assert_eq!(lens.unwrap(), expected, "{field}");
+fn assert_str(view: Result<&str, core::str::Utf8Error>, expected: &str, field: &str) {
+    assert_eq!(view.unwrap(), expected, "{field}");
 }
 
 fn assert_opt_str(
-    lens: Option<Result<&str, core::str::Utf8Error>>,
+    view: Option<Result<&str, core::str::Utf8Error>>,
     expected: &Option<String>,
     field: &str,
 ) {
-    assert_eq!(lens.map(Result::unwrap), expected.as_deref(), "{field}");
+    assert_eq!(view.map(Result::unwrap), expected.as_deref(), "{field}");
 }
 
 fn assert_strs<'a>(
-    lens: impl Iterator<Item = Result<&'a str, core::str::Utf8Error>>,
+    view: impl Iterator<Item = Result<&'a str, core::str::Utf8Error>>,
     expected: &[String],
     field: &str,
 ) {
-    let lens: Vec<&str> = lens.map(Result::unwrap).collect();
-    assert_eq!(lens, expected, "{field}");
+    let view: Vec<&str> = view.map(Result::unwrap).collect();
+    assert_eq!(view, expected, "{field}");
 }
 
-fn assert_bytes_list<'a>(lens: impl Iterator<Item = &'a [u8]>, expected: &[Vec<u8>], field: &str) {
-    assert_eq!(lens.collect::<Vec<_>>(), expected, "{field}");
+fn assert_bytes_list<'a>(view: impl Iterator<Item = &'a [u8]>, expected: &[Vec<u8>], field: &str) {
+    assert_eq!(view.collect::<Vec<_>>(), expected, "{field}");
 }
 
-/// Encodes `$value` with `prost`, parses it with `$lens`, and checks every field.
+/// Encodes `$value` with `prost`, parses it with `$view`, and checks every field.
 macro_rules! round_trip {
-    ($lens:ty, $value:expr) => {{
+    ($view:ty, $value:expr) => {{
         let expected = $value;
         let bytes = expected.encode_to_vec();
-        let lens = <$lens>::parse(bytes.as_slice()).expect("lens must accept prost output");
-        lens.assert_matches(&expected);
+        let view = <$view>::parse(bytes.as_slice()).expect("view must accept prost output");
+        view.assert_matches(&expected);
     }};
 }
 
@@ -82,7 +82,7 @@ macro_rules! round_trip {
 // solana.storage.ConfirmedBlock
 // ---------------------------------------------------------------------------------------
 
-impl<B: AsRef<[u8]>> Matches<ys_st::ConfirmedBlock> for lens_st::ConfirmedBlock<B> {
+impl<B: AsRef<[u8]>> Matches<ys_st::ConfirmedBlock> for view_st::ConfirmedBlock<B> {
     fn assert_matches(&self, expected: &ys_st::ConfirmedBlock) {
         let ys_st::ConfirmedBlock {
             previous_blockhash,
@@ -113,7 +113,7 @@ impl<B: AsRef<[u8]>> Matches<ys_st::ConfirmedBlock> for lens_st::ConfirmedBlock<
     }
 }
 
-impl<B: AsRef<[u8]>> Matches<ys_st::ConfirmedTransaction> for lens_st::ConfirmedTransaction<B> {
+impl<B: AsRef<[u8]>> Matches<ys_st::ConfirmedTransaction> for view_st::ConfirmedTransaction<B> {
     fn assert_matches(&self, expected: &ys_st::ConfirmedTransaction) {
         let ys_st::ConfirmedTransaction { transaction, meta } = expected;
         assert_opt(self.transaction(), transaction.as_ref(), "transaction");
@@ -121,7 +121,7 @@ impl<B: AsRef<[u8]>> Matches<ys_st::ConfirmedTransaction> for lens_st::Confirmed
     }
 }
 
-impl<B: AsRef<[u8]>> Matches<ys_st::Transaction> for lens_st::Transaction<B> {
+impl<B: AsRef<[u8]>> Matches<ys_st::Transaction> for view_st::Transaction<B> {
     fn assert_matches(&self, expected: &ys_st::Transaction) {
         let ys_st::Transaction {
             signatures,
@@ -132,7 +132,7 @@ impl<B: AsRef<[u8]>> Matches<ys_st::Transaction> for lens_st::Transaction<B> {
     }
 }
 
-impl<B: AsRef<[u8]>> Matches<ys_st::Message> for lens_st::Message<B> {
+impl<B: AsRef<[u8]>> Matches<ys_st::Message> for view_st::Message<B> {
     fn assert_matches(&self, expected: &ys_st::Message) {
         let ys_st::Message {
             header,
@@ -161,7 +161,7 @@ impl<B: AsRef<[u8]>> Matches<ys_st::Message> for lens_st::Message<B> {
     }
 }
 
-impl<B: AsRef<[u8]>> Matches<ys_st::TransactionConfig> for lens_st::TransactionConfig<B> {
+impl<B: AsRef<[u8]>> Matches<ys_st::TransactionConfig> for view_st::TransactionConfig<B> {
     fn assert_matches(&self, expected: &ys_st::TransactionConfig) {
         let ys_st::TransactionConfig {
             priority_fee,
@@ -184,7 +184,7 @@ impl<B: AsRef<[u8]>> Matches<ys_st::TransactionConfig> for lens_st::TransactionC
     }
 }
 
-impl<B: AsRef<[u8]>> Matches<ys_st::MessageHeader> for lens_st::MessageHeader<B> {
+impl<B: AsRef<[u8]>> Matches<ys_st::MessageHeader> for view_st::MessageHeader<B> {
     fn assert_matches(&self, expected: &ys_st::MessageHeader) {
         let ys_st::MessageHeader {
             num_required_signatures,
@@ -204,7 +204,7 @@ impl<B: AsRef<[u8]>> Matches<ys_st::MessageHeader> for lens_st::MessageHeader<B>
 }
 
 impl<B: AsRef<[u8]>> Matches<ys_st::MessageAddressTableLookup>
-    for lens_st::MessageAddressTableLookup<B>
+    for view_st::MessageAddressTableLookup<B>
 {
     fn assert_matches(&self, expected: &ys_st::MessageAddressTableLookup) {
         let ys_st::MessageAddressTableLookup {
@@ -226,7 +226,7 @@ impl<B: AsRef<[u8]>> Matches<ys_st::MessageAddressTableLookup>
     }
 }
 
-impl<B: AsRef<[u8]>> Matches<ys_st::TransactionStatusMeta> for lens_st::TransactionStatusMeta<B> {
+impl<B: AsRef<[u8]>> Matches<ys_st::TransactionStatusMeta> for view_st::TransactionStatusMeta<B> {
     fn assert_matches(&self, expected: &ys_st::TransactionStatusMeta) {
         let ys_st::TransactionStatusMeta {
             err,
@@ -295,14 +295,14 @@ impl<B: AsRef<[u8]>> Matches<ys_st::TransactionStatusMeta> for lens_st::Transact
     }
 }
 
-impl<B: AsRef<[u8]>> Matches<ys_st::TransactionError> for lens_st::TransactionError<B> {
+impl<B: AsRef<[u8]>> Matches<ys_st::TransactionError> for view_st::TransactionError<B> {
     fn assert_matches(&self, expected: &ys_st::TransactionError) {
         let ys_st::TransactionError { err } = expected;
         assert_eq!(self.err(), err.as_slice(), "err");
     }
 }
 
-impl<B: AsRef<[u8]>> Matches<ys_st::InnerInstructions> for lens_st::InnerInstructions<B> {
+impl<B: AsRef<[u8]>> Matches<ys_st::InnerInstructions> for view_st::InnerInstructions<B> {
     fn assert_matches(&self, expected: &ys_st::InnerInstructions) {
         let ys_st::InnerInstructions {
             index,
@@ -313,7 +313,7 @@ impl<B: AsRef<[u8]>> Matches<ys_st::InnerInstructions> for lens_st::InnerInstruc
     }
 }
 
-impl<B: AsRef<[u8]>> Matches<ys_st::InnerInstruction> for lens_st::InnerInstruction<B> {
+impl<B: AsRef<[u8]>> Matches<ys_st::InnerInstruction> for view_st::InnerInstruction<B> {
     fn assert_matches(&self, expected: &ys_st::InnerInstruction) {
         let ys_st::InnerInstruction {
             program_id_index,
@@ -328,7 +328,7 @@ impl<B: AsRef<[u8]>> Matches<ys_st::InnerInstruction> for lens_st::InnerInstruct
     }
 }
 
-impl<B: AsRef<[u8]>> Matches<ys_st::CompiledInstruction> for lens_st::CompiledInstruction<B> {
+impl<B: AsRef<[u8]>> Matches<ys_st::CompiledInstruction> for view_st::CompiledInstruction<B> {
     fn assert_matches(&self, expected: &ys_st::CompiledInstruction) {
         let ys_st::CompiledInstruction {
             program_id_index,
@@ -341,7 +341,7 @@ impl<B: AsRef<[u8]>> Matches<ys_st::CompiledInstruction> for lens_st::CompiledIn
     }
 }
 
-impl<B: AsRef<[u8]>> Matches<ys_st::TokenBalance> for lens_st::TokenBalance<B> {
+impl<B: AsRef<[u8]>> Matches<ys_st::TokenBalance> for view_st::TokenBalance<B> {
     fn assert_matches(&self, expected: &ys_st::TokenBalance) {
         let ys_st::TokenBalance {
             account_index,
@@ -362,7 +362,7 @@ impl<B: AsRef<[u8]>> Matches<ys_st::TokenBalance> for lens_st::TokenBalance<B> {
     }
 }
 
-impl<B: AsRef<[u8]>> Matches<ys_st::UiTokenAmount> for lens_st::UiTokenAmount<B> {
+impl<B: AsRef<[u8]>> Matches<ys_st::UiTokenAmount> for view_st::UiTokenAmount<B> {
     fn assert_matches(&self, expected: &ys_st::UiTokenAmount) {
         let ys_st::UiTokenAmount {
             ui_amount,
@@ -381,7 +381,7 @@ impl<B: AsRef<[u8]>> Matches<ys_st::UiTokenAmount> for lens_st::UiTokenAmount<B>
     }
 }
 
-impl<B: AsRef<[u8]>> Matches<ys_st::ReturnData> for lens_st::ReturnData<B> {
+impl<B: AsRef<[u8]>> Matches<ys_st::ReturnData> for view_st::ReturnData<B> {
     fn assert_matches(&self, expected: &ys_st::ReturnData) {
         let ys_st::ReturnData { program_id, data } = expected;
         assert_eq!(self.program_id(), program_id.as_slice(), "program_id");
@@ -389,7 +389,7 @@ impl<B: AsRef<[u8]>> Matches<ys_st::ReturnData> for lens_st::ReturnData<B> {
     }
 }
 
-impl<B: AsRef<[u8]>> Matches<ys_st::Reward> for lens_st::Reward<B> {
+impl<B: AsRef<[u8]>> Matches<ys_st::Reward> for view_st::Reward<B> {
     fn assert_matches(&self, expected: &ys_st::Reward) {
         let ys_st::Reward {
             pubkey,
@@ -408,7 +408,7 @@ impl<B: AsRef<[u8]>> Matches<ys_st::Reward> for lens_st::Reward<B> {
     }
 }
 
-impl<B: AsRef<[u8]>> Matches<ys_st::Rewards> for lens_st::Rewards<B> {
+impl<B: AsRef<[u8]>> Matches<ys_st::Rewards> for view_st::Rewards<B> {
     fn assert_matches(&self, expected: &ys_st::Rewards) {
         let ys_st::Rewards {
             rewards,
@@ -423,21 +423,21 @@ impl<B: AsRef<[u8]>> Matches<ys_st::Rewards> for lens_st::Rewards<B> {
     }
 }
 
-impl<B: AsRef<[u8]>> Matches<ys_st::UnixTimestamp> for lens_st::UnixTimestamp<B> {
+impl<B: AsRef<[u8]>> Matches<ys_st::UnixTimestamp> for view_st::UnixTimestamp<B> {
     fn assert_matches(&self, expected: &ys_st::UnixTimestamp) {
         let ys_st::UnixTimestamp { timestamp } = expected;
         assert_eq!(self.timestamp(), *timestamp, "timestamp");
     }
 }
 
-impl<B: AsRef<[u8]>> Matches<ys_st::BlockHeight> for lens_st::BlockHeight<B> {
+impl<B: AsRef<[u8]>> Matches<ys_st::BlockHeight> for view_st::BlockHeight<B> {
     fn assert_matches(&self, expected: &ys_st::BlockHeight) {
         let ys_st::BlockHeight { block_height } = expected;
         assert_eq!(self.block_height(), *block_height, "block_height");
     }
 }
 
-impl<B: AsRef<[u8]>> Matches<ys_st::NumPartitions> for lens_st::NumPartitions<B> {
+impl<B: AsRef<[u8]>> Matches<ys_st::NumPartitions> for view_st::NumPartitions<B> {
     fn assert_matches(&self, expected: &ys_st::NumPartitions) {
         let ys_st::NumPartitions { num_partitions } = expected;
         assert_eq!(self.num_partitions(), *num_partitions, "num_partitions");
@@ -448,7 +448,7 @@ impl<B: AsRef<[u8]>> Matches<ys_st::NumPartitions> for lens_st::NumPartitions<B>
 // geyser
 // ---------------------------------------------------------------------------------------
 
-impl<B: AsRef<[u8]>> Matches<prost_types::Timestamp> for lens_pb::Timestamp<B> {
+impl<B: AsRef<[u8]>> Matches<prost_types::Timestamp> for view_pb::Timestamp<B> {
     fn assert_matches(&self, expected: &prost_types::Timestamp) {
         let prost_types::Timestamp { seconds, nanos } = expected;
         assert_eq!(self.seconds(), *seconds, "seconds");
@@ -456,29 +456,29 @@ impl<B: AsRef<[u8]>> Matches<prost_types::Timestamp> for lens_pb::Timestamp<B> {
     }
 }
 
-/// Asserts that a lens oneof getter and a `prost` oneof field hold the same member with
+/// Asserts that a view oneof getter and a `prost` oneof field hold the same member with
 /// the same contents. Variant names are shared between the two enums.
 macro_rules! assert_oneof {
-    ($lens:expr, $expected:expr, $lens_enum:ident, $prost_enum:ident, [$($variant:ident),* $(,)?]) => {
-        match ($lens, $expected) {
+    ($view:expr, $expected:expr, $view_enum:ident, $prost_enum:ident, [$($variant:ident),* $(,)?]) => {
+        match ($view, $expected) {
             (None, None) => {}
             $(
-                (Some($lens_enum::$variant(lens)), Some($prost_enum::$variant(expected))) => {
-                    lens.assert_matches(expected)
+                (Some($view_enum::$variant(view)), Some($prost_enum::$variant(expected))) => {
+                    view.assert_matches(expected)
                 }
             )*
-            (lens, expected) => panic!(
-                "oneof mismatch: lens has a member: {}, expected has a member: {}",
-                lens.is_some(),
+            (view, expected) => panic!(
+                "oneof mismatch: view has a member: {}, expected has a member: {}",
+                view.is_some(),
                 expected.is_some()
             ),
         }
     };
 }
 
-impl<B: AsRef<[u8]>> Matches<ys::SubscribeUpdate> for lens::SubscribeUpdate<B> {
+impl<B: AsRef<[u8]>> Matches<ys::SubscribeUpdate> for view::SubscribeUpdate<B> {
     fn assert_matches(&self, expected: &ys::SubscribeUpdate) {
-        use lens::subscribe_update::UpdateOneof as LensOneof;
+        use view::subscribe_update::UpdateOneof as ViewOneof;
         use ys::subscribe_update::UpdateOneof as ProstOneof;
         let ys::SubscribeUpdate {
             filters,
@@ -490,7 +490,7 @@ impl<B: AsRef<[u8]>> Matches<ys::SubscribeUpdate> for lens::SubscribeUpdate<B> {
         assert_oneof!(
             self.update_oneof(),
             update_oneof,
-            LensOneof,
+            ViewOneof,
             ProstOneof,
             [
                 Account,
@@ -509,9 +509,9 @@ impl<B: AsRef<[u8]>> Matches<ys::SubscribeUpdate> for lens::SubscribeUpdate<B> {
     }
 }
 
-impl<B: AsRef<[u8]>> Matches<ys::SubscribeUpdateDeshred> for lens::SubscribeUpdateDeshred<B> {
+impl<B: AsRef<[u8]>> Matches<ys::SubscribeUpdateDeshred> for view::SubscribeUpdateDeshred<B> {
     fn assert_matches(&self, expected: &ys::SubscribeUpdateDeshred) {
-        use lens::subscribe_update_deshred::UpdateOneof as LensOneof;
+        use view::subscribe_update_deshred::UpdateOneof as ViewOneof;
         use ys::subscribe_update_deshred::UpdateOneof as ProstOneof;
         let ys::SubscribeUpdateDeshred {
             filters,
@@ -523,16 +523,16 @@ impl<B: AsRef<[u8]>> Matches<ys::SubscribeUpdateDeshred> for lens::SubscribeUpda
         assert_oneof!(
             self.update_oneof(),
             update_oneof,
-            LensOneof,
+            ViewOneof,
             ProstOneof,
             [DeshredTransaction, Ping, Pong, Slot, DeshredUpdateParent]
         );
     }
 }
 
-impl<B: AsRef<[u8]>> Matches<ys::SubscribeUpdateGossip> for lens::SubscribeUpdateGossip<B> {
+impl<B: AsRef<[u8]>> Matches<ys::SubscribeUpdateGossip> for view::SubscribeUpdateGossip<B> {
     fn assert_matches(&self, expected: &ys::SubscribeUpdateGossip) {
-        use lens::subscribe_update_gossip::UpdateOneof as LensOneof;
+        use view::subscribe_update_gossip::UpdateOneof as ViewOneof;
         use ys::subscribe_update_gossip::UpdateOneof as ProstOneof;
         let ys::SubscribeUpdateGossip {
             update_oneof,
@@ -544,22 +544,22 @@ impl<B: AsRef<[u8]>> Matches<ys::SubscribeUpdateGossip> for lens::SubscribeUpdat
         assert_oneof!(
             self.update_oneof(),
             update_oneof,
-            LensOneof,
+            ViewOneof,
             ProstOneof,
             [Node, Removed, Ping, Snapshot]
         );
     }
 }
 
-/// Asserts that a lens map getter yields exactly the entries of a `prost` `HashMap<String, _>`.
+/// Asserts that a view map getter yields exactly the entries of a `prost` `HashMap<String, _>`.
 fn assert_map<'a, L: Matches<E>, E>(
-    lens: impl Iterator<Item = (Result<&'a str, core::str::Utf8Error>, L)>,
+    view: impl Iterator<Item = (Result<&'a str, core::str::Utf8Error>, L)>,
     expected: &HashMap<String, E>,
     field: &str,
 ) {
-    let lens: Vec<(&str, L)> = lens.map(|(key, value)| (key.unwrap(), value)).collect();
-    assert_eq!(lens.len(), expected.len(), "{field}: entry count");
-    for (key, value) in &lens {
+    let view: Vec<(&str, L)> = view.map(|(key, value)| (key.unwrap(), value)).collect();
+    assert_eq!(view.len(), expected.len(), "{field}: entry count");
+    for (key, value) in &view {
         let expected = expected
             .get(*key)
             .unwrap_or_else(|| panic!("{field}: unexpected key {key:?}"));
@@ -567,7 +567,7 @@ fn assert_map<'a, L: Matches<E>, E>(
     }
 }
 
-impl<B: AsRef<[u8]>> Matches<ys::SubscribeRequest> for lens::SubscribeRequest<B> {
+impl<B: AsRef<[u8]>> Matches<ys::SubscribeRequest> for view::SubscribeRequest<B> {
     fn assert_matches(&self, expected: &ys::SubscribeRequest) {
         let ys::SubscribeRequest {
             accounts,
@@ -610,7 +610,7 @@ impl<B: AsRef<[u8]>> Matches<ys::SubscribeRequest> for lens::SubscribeRequest<B>
     }
 }
 
-impl<B: AsRef<[u8]>> Matches<ys::CuckooFilter> for lens::CuckooFilter<B> {
+impl<B: AsRef<[u8]>> Matches<ys::CuckooFilter> for view::CuckooFilter<B> {
     fn assert_matches(&self, expected: &ys::CuckooFilter) {
         let ys::CuckooFilter {
             data,
@@ -630,7 +630,7 @@ impl<B: AsRef<[u8]>> Matches<ys::CuckooFilter> for lens::CuckooFilter<B> {
 }
 
 impl<B: AsRef<[u8]>> Matches<ys::SubscribeRequestFilterAccounts>
-    for lens::SubscribeRequestFilterAccounts<B>
+    for view::SubscribeRequestFilterAccounts<B>
 {
     fn assert_matches(&self, expected: &ys::SubscribeRequestFilterAccounts) {
         let ys::SubscribeRequestFilterAccounts {
@@ -653,43 +653,43 @@ impl<B: AsRef<[u8]>> Matches<ys::SubscribeRequestFilterAccounts>
 }
 
 impl<B: AsRef<[u8]>> Matches<ys::SubscribeRequestFilterAccountsFilter>
-    for lens::SubscribeRequestFilterAccountsFilter<B>
+    for view::SubscribeRequestFilterAccountsFilter<B>
 {
     fn assert_matches(&self, expected: &ys::SubscribeRequestFilterAccountsFilter) {
-        use lens::subscribe_request_filter_accounts_filter::Filter as L;
+        use view::subscribe_request_filter_accounts_filter::Filter as L;
         use ys::subscribe_request_filter_accounts_filter::Filter as E;
         let ys::SubscribeRequestFilterAccountsFilter { filter } = expected;
         match (self.filter(), filter) {
             (None, None) => {}
-            (Some(L::Memcmp(lens)), Some(E::Memcmp(expected))) => lens.assert_matches(expected),
-            (Some(L::Datasize(lens)), Some(E::Datasize(expected))) => assert_eq!(lens, *expected),
-            (Some(L::TokenAccountState(lens)), Some(E::TokenAccountState(expected))) => {
-                assert_eq!(lens, *expected)
+            (Some(L::Memcmp(view)), Some(E::Memcmp(expected))) => view.assert_matches(expected),
+            (Some(L::Datasize(view)), Some(E::Datasize(expected))) => assert_eq!(view, *expected),
+            (Some(L::TokenAccountState(view)), Some(E::TokenAccountState(expected))) => {
+                assert_eq!(view, *expected)
             }
-            (Some(L::Lamports(lens)), Some(E::Lamports(expected))) => lens.assert_matches(expected),
+            (Some(L::Lamports(view)), Some(E::Lamports(expected))) => view.assert_matches(expected),
             _ => panic!("filter: oneof mismatch"),
         }
     }
 }
 
 impl<B: AsRef<[u8]>> Matches<ys::SubscribeRequestFilterAccountsFilterMemcmp>
-    for lens::SubscribeRequestFilterAccountsFilterMemcmp<B>
+    for view::SubscribeRequestFilterAccountsFilterMemcmp<B>
 {
     fn assert_matches(&self, expected: &ys::SubscribeRequestFilterAccountsFilterMemcmp) {
-        use lens::subscribe_request_filter_accounts_filter_memcmp::Data as L;
+        use view::subscribe_request_filter_accounts_filter_memcmp::Data as L;
         use ys::subscribe_request_filter_accounts_filter_memcmp::Data as E;
         let ys::SubscribeRequestFilterAccountsFilterMemcmp { offset, data } = expected;
         assert_eq!(self.offset(), *offset, "offset");
         match (self.data(), data) {
             (None, None) => {}
-            (Some(L::Bytes(lens)), Some(E::Bytes(expected))) => {
-                assert_eq!(lens, expected.as_slice())
+            (Some(L::Bytes(view)), Some(E::Bytes(expected))) => {
+                assert_eq!(view, expected.as_slice())
             }
-            (Some(L::Base58(lens)), Some(E::Base58(expected))) => {
-                assert_eq!(lens.unwrap(), expected)
+            (Some(L::Base58(view)), Some(E::Base58(expected))) => {
+                assert_eq!(view.unwrap(), expected)
             }
-            (Some(L::Base64(lens)), Some(E::Base64(expected))) => {
-                assert_eq!(lens.unwrap(), expected)
+            (Some(L::Base64(view)), Some(E::Base64(expected))) => {
+                assert_eq!(view.unwrap(), expected)
             }
             _ => panic!("data: oneof mismatch"),
         }
@@ -697,25 +697,25 @@ impl<B: AsRef<[u8]>> Matches<ys::SubscribeRequestFilterAccountsFilterMemcmp>
 }
 
 impl<B: AsRef<[u8]>> Matches<ys::SubscribeRequestFilterAccountsFilterLamports>
-    for lens::SubscribeRequestFilterAccountsFilterLamports<B>
+    for view::SubscribeRequestFilterAccountsFilterLamports<B>
 {
     fn assert_matches(&self, expected: &ys::SubscribeRequestFilterAccountsFilterLamports) {
-        use lens::subscribe_request_filter_accounts_filter_lamports::Cmp as L;
+        use view::subscribe_request_filter_accounts_filter_lamports::Cmp as L;
         use ys::subscribe_request_filter_accounts_filter_lamports::Cmp as E;
         let ys::SubscribeRequestFilterAccountsFilterLamports { cmp } = expected;
         match (self.cmp(), cmp) {
             (None, None) => {}
-            (Some(L::Eq(lens)), Some(E::Eq(expected)))
-            | (Some(L::Ne(lens)), Some(E::Ne(expected)))
-            | (Some(L::Lt(lens)), Some(E::Lt(expected)))
-            | (Some(L::Gt(lens)), Some(E::Gt(expected))) => assert_eq!(lens, *expected),
+            (Some(L::Eq(view)), Some(E::Eq(expected)))
+            | (Some(L::Ne(view)), Some(E::Ne(expected)))
+            | (Some(L::Lt(view)), Some(E::Lt(expected)))
+            | (Some(L::Gt(view)), Some(E::Gt(expected))) => assert_eq!(view, *expected),
             _ => panic!("cmp: oneof mismatch"),
         }
     }
 }
 
 impl<B: AsRef<[u8]>> Matches<ys::SubscribeRequestFilterSlots>
-    for lens::SubscribeRequestFilterSlots<B>
+    for view::SubscribeRequestFilterSlots<B>
 {
     fn assert_matches(&self, expected: &ys::SubscribeRequestFilterSlots) {
         let ys::SubscribeRequestFilterSlots {
@@ -728,7 +728,7 @@ impl<B: AsRef<[u8]>> Matches<ys::SubscribeRequestFilterSlots>
 }
 
 impl<B: AsRef<[u8]>> Matches<ys::SubscribeRequestFilterTransactions>
-    for lens::SubscribeRequestFilterTransactions<B>
+    for view::SubscribeRequestFilterTransactions<B>
 {
     fn assert_matches(&self, expected: &ys::SubscribeRequestFilterTransactions) {
         let ys::SubscribeRequestFilterTransactions {
@@ -761,7 +761,7 @@ impl<B: AsRef<[u8]>> Matches<ys::SubscribeRequestFilterTransactions>
 }
 
 impl<B: AsRef<[u8]>> Matches<ys::SubscribeRequestFilterBlocks>
-    for lens::SubscribeRequestFilterBlocks<B>
+    for view::SubscribeRequestFilterBlocks<B>
 {
     fn assert_matches(&self, expected: &ys::SubscribeRequestFilterBlocks) {
         let ys::SubscribeRequestFilterBlocks {
@@ -784,7 +784,7 @@ impl<B: AsRef<[u8]>> Matches<ys::SubscribeRequestFilterBlocks>
 }
 
 impl<B: AsRef<[u8]>> Matches<ys::SubscribeRequestFilterBlocksMeta>
-    for lens::SubscribeRequestFilterBlocksMeta<B>
+    for view::SubscribeRequestFilterBlocksMeta<B>
 {
     fn assert_matches(&self, expected: &ys::SubscribeRequestFilterBlocksMeta) {
         let ys::SubscribeRequestFilterBlocksMeta {} = expected;
@@ -792,7 +792,7 @@ impl<B: AsRef<[u8]>> Matches<ys::SubscribeRequestFilterBlocksMeta>
 }
 
 impl<B: AsRef<[u8]>> Matches<ys::SubscribeRequestFilterEntry>
-    for lens::SubscribeRequestFilterEntry<B>
+    for view::SubscribeRequestFilterEntry<B>
 {
     fn assert_matches(&self, expected: &ys::SubscribeRequestFilterEntry) {
         let ys::SubscribeRequestFilterEntry {
@@ -803,7 +803,7 @@ impl<B: AsRef<[u8]>> Matches<ys::SubscribeRequestFilterEntry>
 }
 
 impl<B: AsRef<[u8]>> Matches<ys::SubscribeRequestFilterBlockFooter>
-    for lens::SubscribeRequestFilterBlockFooter<B>
+    for view::SubscribeRequestFilterBlockFooter<B>
 {
     fn assert_matches(&self, expected: &ys::SubscribeRequestFilterBlockFooter) {
         let ys::SubscribeRequestFilterBlockFooter {
@@ -814,7 +814,7 @@ impl<B: AsRef<[u8]>> Matches<ys::SubscribeRequestFilterBlockFooter>
 }
 
 impl<B: AsRef<[u8]>> Matches<ys::SubscribeRequestAccountsDataSlice>
-    for lens::SubscribeRequestAccountsDataSlice<B>
+    for view::SubscribeRequestAccountsDataSlice<B>
 {
     fn assert_matches(&self, expected: &ys::SubscribeRequestAccountsDataSlice) {
         let ys::SubscribeRequestAccountsDataSlice { offset, length } = expected;
@@ -823,14 +823,14 @@ impl<B: AsRef<[u8]>> Matches<ys::SubscribeRequestAccountsDataSlice>
     }
 }
 
-impl<B: AsRef<[u8]>> Matches<ys::SubscribeRequestPing> for lens::SubscribeRequestPing<B> {
+impl<B: AsRef<[u8]>> Matches<ys::SubscribeRequestPing> for view::SubscribeRequestPing<B> {
     fn assert_matches(&self, expected: &ys::SubscribeRequestPing) {
         let ys::SubscribeRequestPing { id } = expected;
         assert_eq!(self.id(), *id, "id");
     }
 }
 
-impl<B: AsRef<[u8]>> Matches<ys::SubscribeUpdateAccount> for lens::SubscribeUpdateAccount<B> {
+impl<B: AsRef<[u8]>> Matches<ys::SubscribeUpdateAccount> for view::SubscribeUpdateAccount<B> {
     fn assert_matches(&self, expected: &ys::SubscribeUpdateAccount) {
         let ys::SubscribeUpdateAccount {
             account,
@@ -846,7 +846,7 @@ impl<B: AsRef<[u8]>> Matches<ys::SubscribeUpdateAccount> for lens::SubscribeUpda
 }
 
 impl<B: AsRef<[u8]>> Matches<ys::SubscribeUpdateAccountInfo>
-    for lens::SubscribeUpdateAccountInfo<B>
+    for view::SubscribeUpdateAccountInfo<B>
 {
     fn assert_matches(&self, expected: &ys::SubscribeUpdateAccountInfo) {
         let ys::SubscribeUpdateAccountInfo {
@@ -874,7 +874,7 @@ impl<B: AsRef<[u8]>> Matches<ys::SubscribeUpdateAccountInfo>
     }
 }
 
-impl<B: AsRef<[u8]>> Matches<ys::SubscribeUpdateSlot> for lens::SubscribeUpdateSlot<B> {
+impl<B: AsRef<[u8]>> Matches<ys::SubscribeUpdateSlot> for view::SubscribeUpdateSlot<B> {
     fn assert_matches(&self, expected: &ys::SubscribeUpdateSlot) {
         let ys::SubscribeUpdateSlot {
             slot,
@@ -892,7 +892,7 @@ impl<B: AsRef<[u8]>> Matches<ys::SubscribeUpdateSlot> for lens::SubscribeUpdateS
 }
 
 impl<B: AsRef<[u8]>> Matches<ys::SubscribeUpdateTransaction>
-    for lens::SubscribeUpdateTransaction<B>
+    for view::SubscribeUpdateTransaction<B>
 {
     fn assert_matches(&self, expected: &ys::SubscribeUpdateTransaction) {
         let ys::SubscribeUpdateTransaction {
@@ -907,7 +907,7 @@ impl<B: AsRef<[u8]>> Matches<ys::SubscribeUpdateTransaction>
 }
 
 impl<B: AsRef<[u8]>> Matches<ys::SubscribeUpdateTransactionInfo>
-    for lens::SubscribeUpdateTransactionInfo<B>
+    for view::SubscribeUpdateTransactionInfo<B>
 {
     fn assert_matches(&self, expected: &ys::SubscribeUpdateTransactionInfo) {
         let ys::SubscribeUpdateTransactionInfo {
@@ -926,7 +926,7 @@ impl<B: AsRef<[u8]>> Matches<ys::SubscribeUpdateTransactionInfo>
 }
 
 impl<B: AsRef<[u8]>> Matches<ys::SubscribeUpdateTransactionStatus>
-    for lens::SubscribeUpdateTransactionStatus<B>
+    for view::SubscribeUpdateTransactionStatus<B>
 {
     fn assert_matches(&self, expected: &ys::SubscribeUpdateTransactionStatus) {
         let ys::SubscribeUpdateTransactionStatus {
@@ -946,7 +946,7 @@ impl<B: AsRef<[u8]>> Matches<ys::SubscribeUpdateTransactionStatus>
     }
 }
 
-impl<B: AsRef<[u8]>> Matches<ys::SubscribeUpdateBlock> for lens::SubscribeUpdateBlock<B> {
+impl<B: AsRef<[u8]>> Matches<ys::SubscribeUpdateBlock> for view::SubscribeUpdateBlock<B> {
     fn assert_matches(&self, expected: &ys::SubscribeUpdateBlock) {
         let ys::SubscribeUpdateBlock {
             slot,
@@ -988,7 +988,7 @@ impl<B: AsRef<[u8]>> Matches<ys::SubscribeUpdateBlock> for lens::SubscribeUpdate
     }
 }
 
-impl<B: AsRef<[u8]>> Matches<ys::SubscribeUpdateBlockMeta> for lens::SubscribeUpdateBlockMeta<B> {
+impl<B: AsRef<[u8]>> Matches<ys::SubscribeUpdateBlockMeta> for view::SubscribeUpdateBlockMeta<B> {
     fn assert_matches(&self, expected: &ys::SubscribeUpdateBlockMeta) {
         let ys::SubscribeUpdateBlockMeta {
             slot,
@@ -1023,7 +1023,7 @@ impl<B: AsRef<[u8]>> Matches<ys::SubscribeUpdateBlockMeta> for lens::SubscribeUp
 }
 
 impl<B: AsRef<[u8]>> Matches<ys::SubscribeUpdateBlockFooter>
-    for lens::SubscribeUpdateBlockFooter<B>
+    for view::SubscribeUpdateBlockFooter<B>
 {
     fn assert_matches(&self, expected: &ys::SubscribeUpdateBlockFooter) {
         let ys::SubscribeUpdateBlockFooter {
@@ -1047,7 +1047,7 @@ impl<B: AsRef<[u8]>> Matches<ys::SubscribeUpdateBlockFooter>
     }
 }
 
-impl<B: AsRef<[u8]>> Matches<ys::SubscribeUpdateEntry> for lens::SubscribeUpdateEntry<B> {
+impl<B: AsRef<[u8]>> Matches<ys::SubscribeUpdateEntry> for view::SubscribeUpdateEntry<B> {
     fn assert_matches(&self, expected: &ys::SubscribeUpdateEntry) {
         let ys::SubscribeUpdateEntry {
             slot,
@@ -1075,7 +1075,7 @@ impl<B: AsRef<[u8]>> Matches<ys::SubscribeUpdateEntry> for lens::SubscribeUpdate
 }
 
 impl<B: AsRef<[u8]>> Matches<ys::SubscribeUpdateEntryUpdateParent>
-    for lens::SubscribeUpdateEntryUpdateParent<B>
+    for view::SubscribeUpdateEntryUpdateParent<B>
 {
     fn assert_matches(&self, expected: &ys::SubscribeUpdateEntryUpdateParent) {
         let ys::SubscribeUpdateEntryUpdateParent {
@@ -1091,13 +1091,13 @@ impl<B: AsRef<[u8]>> Matches<ys::SubscribeUpdateEntryUpdateParent>
     }
 }
 
-impl<B: AsRef<[u8]>> Matches<ys::SubscribeUpdatePing> for lens::SubscribeUpdatePing<B> {
+impl<B: AsRef<[u8]>> Matches<ys::SubscribeUpdatePing> for view::SubscribeUpdatePing<B> {
     fn assert_matches(&self, expected: &ys::SubscribeUpdatePing) {
         let ys::SubscribeUpdatePing {} = expected;
     }
 }
 
-impl<B: AsRef<[u8]>> Matches<ys::SubscribeUpdatePong> for lens::SubscribeUpdatePong<B> {
+impl<B: AsRef<[u8]>> Matches<ys::SubscribeUpdatePong> for view::SubscribeUpdatePong<B> {
     fn assert_matches(&self, expected: &ys::SubscribeUpdatePong) {
         let ys::SubscribeUpdatePong { id } = expected;
         assert_eq!(self.id(), *id, "id");
@@ -1105,7 +1105,7 @@ impl<B: AsRef<[u8]>> Matches<ys::SubscribeUpdatePong> for lens::SubscribeUpdateP
 }
 
 impl<B: AsRef<[u8]>> Matches<ys::SubscribeUpdateDeshredUpdateParent>
-    for lens::SubscribeUpdateDeshredUpdateParent<B>
+    for view::SubscribeUpdateDeshredUpdateParent<B>
 {
     fn assert_matches(&self, expected: &ys::SubscribeUpdateDeshredUpdateParent) {
         let ys::SubscribeUpdateDeshredUpdateParent {
@@ -1125,7 +1125,7 @@ impl<B: AsRef<[u8]>> Matches<ys::SubscribeUpdateDeshredUpdateParent>
 }
 
 impl<B: AsRef<[u8]>> Matches<ys::SubscribeUpdateDeshredTransaction>
-    for lens::SubscribeUpdateDeshredTransaction<B>
+    for view::SubscribeUpdateDeshredTransaction<B>
 {
     fn assert_matches(&self, expected: &ys::SubscribeUpdateDeshredTransaction) {
         let ys::SubscribeUpdateDeshredTransaction { transaction, slot } = expected;
@@ -1135,7 +1135,7 @@ impl<B: AsRef<[u8]>> Matches<ys::SubscribeUpdateDeshredTransaction>
 }
 
 impl<B: AsRef<[u8]>> Matches<ys::SubscribeUpdateDeshredTransactionInfo>
-    for lens::SubscribeUpdateDeshredTransactionInfo<B>
+    for view::SubscribeUpdateDeshredTransactionInfo<B>
 {
     fn assert_matches(&self, expected: &ys::SubscribeUpdateDeshredTransactionInfo) {
         let ys::SubscribeUpdateDeshredTransactionInfo {
@@ -1171,7 +1171,7 @@ impl<B: AsRef<[u8]>> Matches<ys::SubscribeUpdateDeshredTransactionInfo>
     }
 }
 
-impl<B: AsRef<[u8]>> Matches<ys::GossipTopology> for lens::GossipTopology<B> {
+impl<B: AsRef<[u8]>> Matches<ys::GossipTopology> for view::GossipTopology<B> {
     fn assert_matches(&self, expected: &ys::GossipTopology) {
         let ys::GossipTopology { nodes } = expected;
         assert_all(self.nodes(), nodes, "nodes");
@@ -1179,7 +1179,7 @@ impl<B: AsRef<[u8]>> Matches<ys::GossipTopology> for lens::GossipTopology<B> {
 }
 
 impl<B: AsRef<[u8]>> Matches<ys::SubscribeUpdateContactInfoNode>
-    for lens::SubscribeUpdateContactInfoNode<B>
+    for view::SubscribeUpdateContactInfoNode<B>
 {
     fn assert_matches(&self, expected: &ys::SubscribeUpdateContactInfoNode) {
         let ys::SubscribeUpdateContactInfoNode {
@@ -1244,7 +1244,7 @@ impl<B: AsRef<[u8]>> Matches<ys::SubscribeUpdateContactInfoNode>
 }
 
 impl<B: AsRef<[u8]>> Matches<ys::SubscribeUpdateContactInfoRemoved>
-    for lens::SubscribeUpdateContactInfoRemoved<B>
+    for view::SubscribeUpdateContactInfoRemoved<B>
 {
     fn assert_matches(&self, expected: &ys::SubscribeUpdateContactInfoRemoved) {
         let ys::SubscribeUpdateContactInfoRemoved { pubkey } = expected;
@@ -1461,7 +1461,7 @@ fn contact_info(n: u8, all_sockets: bool) -> ys::SubscribeUpdateContactInfoNode 
 #[test]
 fn subscribe_update_block() {
     round_trip!(
-        lens::SubscribeUpdateBlock<&[u8]>,
+        view::SubscribeUpdateBlock<&[u8]>,
         ys::SubscribeUpdateBlock {
             slot: 300_000_000,
             blockhash: "blockhash-300000000".to_owned(),
@@ -1488,7 +1488,7 @@ fn subscribe_update_block() {
 #[test]
 fn subscribe_update_block_meta() {
     round_trip!(
-        lens::SubscribeUpdateBlockMeta<&[u8]>,
+        view::SubscribeUpdateBlockMeta<&[u8]>,
         ys::SubscribeUpdateBlockMeta {
             slot: 300_000_000,
             blockhash: "blockhash-300000000".to_owned(),
@@ -1508,7 +1508,7 @@ fn subscribe_update_block_meta() {
 fn subscribe_update_transaction() {
     for n in 1..=3 {
         round_trip!(
-            lens::SubscribeUpdateTransaction<&[u8]>,
+            view::SubscribeUpdateTransaction<&[u8]>,
             ys::SubscribeUpdateTransaction {
                 transaction: Some(transaction_info(n)),
                 slot: 300_000_000,
@@ -1522,7 +1522,7 @@ fn subscribe_update_transaction() {
 fn subscribe_update_transaction_status() {
     for err in [None, Some(ys_st::TransactionError { err: vec![1, 2, 3] })] {
         round_trip!(
-            lens::SubscribeUpdateTransactionStatus<&[u8]>,
+            view::SubscribeUpdateTransactionStatus<&[u8]>,
             ys::SubscribeUpdateTransactionStatus {
                 slot: 300_000_000,
                 signature: signature(9),
@@ -1540,7 +1540,7 @@ fn subscribe_update_account() {
     // A startup account has no bank; a live update does.
     for (n, is_startup) in [(1, true), (2, false)] {
         round_trip!(
-            lens::SubscribeUpdateAccount<&[u8]>,
+            view::SubscribeUpdateAccount<&[u8]>,
             ys::SubscribeUpdateAccount {
                 account: Some(account_info(n)),
                 slot: 300_000_000,
@@ -1554,7 +1554,7 @@ fn subscribe_update_account() {
 #[test]
 fn subscribe_update_slot() {
     round_trip!(
-        lens::SubscribeUpdateSlot<&[u8]>,
+        view::SubscribeUpdateSlot<&[u8]>,
         ys::SubscribeUpdateSlot {
             slot: 300_000_000,
             parent: Some(299_999_999),
@@ -1564,7 +1564,7 @@ fn subscribe_update_slot() {
         }
     );
     round_trip!(
-        lens::SubscribeUpdateSlot<&[u8]>,
+        view::SubscribeUpdateSlot<&[u8]>,
         ys::SubscribeUpdateSlot {
             slot: 300_000_001,
             parent: None,
@@ -1578,7 +1578,7 @@ fn subscribe_update_slot() {
 #[test]
 fn subscribe_update_block_footer() {
     round_trip!(
-        lens::SubscribeUpdateBlockFooter<&[u8]>,
+        view::SubscribeUpdateBlockFooter<&[u8]>,
         ys::SubscribeUpdateBlockFooter {
             slot: 300_000_000,
             bank_id: 7,
@@ -1594,9 +1594,9 @@ fn subscribe_update_block_footer() {
 
 #[test]
 fn subscribe_update_entry_and_update_parent() {
-    round_trip!(lens::SubscribeUpdateEntry<&[u8]>, entry(5));
+    round_trip!(view::SubscribeUpdateEntry<&[u8]>, entry(5));
     round_trip!(
-        lens::SubscribeUpdateEntryUpdateParent<&[u8]>,
+        view::SubscribeUpdateEntryUpdateParent<&[u8]>,
         ys::SubscribeUpdateEntryUpdateParent {
             slot: 300_000_000,
             cleared_bank_id: 6,
@@ -1608,9 +1608,9 @@ fn subscribe_update_entry_and_update_parent() {
 
 #[test]
 fn subscribe_update_ping_and_pong() {
-    round_trip!(lens::SubscribeUpdatePing<&[u8]>, ys::SubscribeUpdatePing {});
+    round_trip!(view::SubscribeUpdatePing<&[u8]>, ys::SubscribeUpdatePing {});
     round_trip!(
-        lens::SubscribeUpdatePong<&[u8]>,
+        view::SubscribeUpdatePong<&[u8]>,
         ys::SubscribeUpdatePong { id: -3 }
     );
 }
@@ -1618,7 +1618,7 @@ fn subscribe_update_ping_and_pong() {
 #[test]
 fn subscribe_update_deshred() {
     round_trip!(
-        lens::SubscribeUpdateDeshredTransaction<&[u8]>,
+        view::SubscribeUpdateDeshredTransaction<&[u8]>,
         ys::SubscribeUpdateDeshredTransaction {
             transaction: Some(ys::SubscribeUpdateDeshredTransactionInfo {
                 signature: signature(4),
@@ -1633,7 +1633,7 @@ fn subscribe_update_deshred() {
         }
     );
     round_trip!(
-        lens::SubscribeUpdateDeshredUpdateParent<&[u8]>,
+        view::SubscribeUpdateDeshredUpdateParent<&[u8]>,
         ys::SubscribeUpdateDeshredUpdateParent {
             slot: 300_000_000,
             update_parent_fec_set_index: 96,
@@ -1646,7 +1646,7 @@ fn subscribe_update_deshred() {
 #[test]
 fn gossip_topology_and_contact_info() {
     round_trip!(
-        lens::GossipTopology<&[u8]>,
+        view::GossipTopology<&[u8]>,
         ys::GossipTopology {
             nodes: vec![
                 contact_info(1, true),
@@ -1656,7 +1656,7 @@ fn gossip_topology_and_contact_info() {
         }
     );
     round_trip!(
-        lens::SubscribeUpdateContactInfoRemoved<&[u8]>,
+        view::SubscribeUpdateContactInfoRemoved<&[u8]>,
         ys::SubscribeUpdateContactInfoRemoved { pubkey: pubkey(9) }
     );
 }
@@ -1664,7 +1664,7 @@ fn gossip_topology_and_contact_info() {
 #[test]
 fn confirmed_block() {
     round_trip!(
-        lens_st::ConfirmedBlock<&[u8]>,
+        view_st::ConfirmedBlock<&[u8]>,
         ys_st::ConfirmedBlock {
             previous_blockhash: "blockhash-299999999".to_owned(),
             blockhash: "blockhash-300000000".to_owned(),
@@ -1690,19 +1690,19 @@ fn confirmed_block() {
 #[test]
 fn empty_messages_decode_to_defaults() {
     round_trip!(
-        lens::SubscribeUpdateBlock<&[u8]>,
+        view::SubscribeUpdateBlock<&[u8]>,
         ys::SubscribeUpdateBlock::default()
     );
     round_trip!(
-        lens::SubscribeUpdateAccount<&[u8]>,
+        view::SubscribeUpdateAccount<&[u8]>,
         ys::SubscribeUpdateAccount::default()
     );
     round_trip!(
-        lens_st::ConfirmedBlock<&[u8]>,
+        view_st::ConfirmedBlock<&[u8]>,
         ys_st::ConfirmedBlock::default()
     );
     round_trip!(
-        lens::SubscribeUpdateContactInfoNode<&[u8]>,
+        view::SubscribeUpdateContactInfoNode<&[u8]>,
         ys::SubscribeUpdateContactInfoNode::default()
     );
 }
@@ -1778,7 +1778,7 @@ fn subscribe_update_envelope_every_variant() {
     ];
     for update in variants {
         round_trip!(
-            lens::SubscribeUpdate<&[u8]>,
+            view::SubscribeUpdate<&[u8]>,
             ys::SubscribeUpdate {
                 filters: vec!["client-filter".to_owned(), "other".to_owned()],
                 update_oneof: Some(update),
@@ -1789,7 +1789,7 @@ fn subscribe_update_envelope_every_variant() {
             }
         );
     }
-    round_trip!(lens::SubscribeUpdate<&[u8]>, ys::SubscribeUpdate::default());
+    round_trip!(view::SubscribeUpdate<&[u8]>, ys::SubscribeUpdate::default());
 }
 
 fn created_at() -> Option<prost_types::Timestamp> {
@@ -1833,7 +1833,7 @@ fn subscribe_update_deshred_envelope_every_variant() {
     ];
     for update in variants {
         round_trip!(
-            lens::SubscribeUpdateDeshred<&[u8]>,
+            view::SubscribeUpdateDeshred<&[u8]>,
             ys::SubscribeUpdateDeshred {
                 filters: vec!["deshred".to_owned()],
                 update_oneof: Some(update),
@@ -1842,7 +1842,7 @@ fn subscribe_update_deshred_envelope_every_variant() {
         );
     }
     round_trip!(
-        lens::SubscribeUpdateDeshred<&[u8]>,
+        view::SubscribeUpdateDeshred<&[u8]>,
         ys::SubscribeUpdateDeshred::default()
     );
 }
@@ -1860,7 +1860,7 @@ fn subscribe_update_gossip_envelope_every_variant() {
     ];
     for (seq, update) in variants.into_iter().enumerate() {
         round_trip!(
-            lens::SubscribeUpdateGossip<&[u8]>,
+            view::SubscribeUpdateGossip<&[u8]>,
             ys::SubscribeUpdateGossip {
                 update_oneof: Some(update),
                 created_at: created_at(),
@@ -1869,7 +1869,7 @@ fn subscribe_update_gossip_envelope_every_variant() {
         );
     }
     round_trip!(
-        lens::SubscribeUpdateGossip<&[u8]>,
+        view::SubscribeUpdateGossip<&[u8]>,
         ys::SubscribeUpdateGossip::default()
     );
 }
@@ -1925,7 +1925,7 @@ fn subscribe_request_with_every_filter() {
     };
 
     round_trip!(
-        lens::SubscribeRequest<&[u8]>,
+        view::SubscribeRequest<&[u8]>,
         ys::SubscribeRequest {
             accounts: named([
                 (
@@ -2022,7 +2022,7 @@ fn subscribe_request_with_every_filter() {
         }
     );
     round_trip!(
-        lens::SubscribeRequest<&[u8]>,
+        view::SubscribeRequest<&[u8]>,
         ys::SubscribeRequest::default()
     );
 }
@@ -2035,16 +2035,16 @@ fn enum_fields_decode_to_their_variants() {
         ..Default::default()
     }
     .encode_to_vec();
-    let slot = lens::SubscribeUpdateSlot::parse(bytes.as_slice()).unwrap();
-    assert_eq!(slot.status(), lens::SlotStatus::SlotDead);
+    let slot = view::SubscribeUpdateSlot::parse(bytes.as_slice()).unwrap();
+    assert_eq!(slot.status(), view::SlotStatus::SlotDead);
 
     let bytes = ys_st::Reward {
         reward_type: ys_st::RewardType::VatDebit as i32,
         ..Default::default()
     }
     .encode_to_vec();
-    let reward = lens_st::Reward::parse(bytes.as_slice()).unwrap();
-    assert_eq!(reward.reward_type(), lens_st::RewardType::VatDebit);
+    let reward = view_st::Reward::parse(bytes.as_slice()).unwrap();
+    assert_eq!(reward.reward_type(), view_st::RewardType::VatDebit);
 
     // A status newer than this schema is kept, not folded into a known one.
     let bytes = ys::SubscribeUpdateSlot {
@@ -2052,6 +2052,6 @@ fn enum_fields_decode_to_their_variants() {
         ..Default::default()
     }
     .encode_to_vec();
-    let slot = lens::SubscribeUpdateSlot::parse(bytes.as_slice()).unwrap();
-    assert_eq!(slot.status(), lens::SlotStatus::Unknown(99));
+    let slot = view::SubscribeUpdateSlot::parse(bytes.as_slice()).unwrap();
+    assert_eq!(slot.status(), view::SlotStatus::Unknown(99));
 }

@@ -2,7 +2,7 @@ use core::fmt;
 
 use crate::wire::WireType;
 
-/// The maximum buffer size a lens can index, imposed by the `u32` offsets stored in the
+/// The maximum buffer size a view can index, imposed by the `u32` offsets stored in the
 /// generated index tables.
 pub const MAX_MESSAGE_LEN: usize = u32::MAX as usize;
 
@@ -14,8 +14,8 @@ pub const MAX_DEPTH: u32 = 100;
 ///
 /// Produced during the structural walk performed by a generated `parse`, and by the
 /// low-level readers in [`crate::varint`] and [`crate::wire`]. Field getters on a
-/// generated lens do not return this type: the walk has already rejected anything
-/// malformed by the time a lens exists.
+/// generated view do not return this type: the walk has already rejected anything
+/// malformed by the time a view exists.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum DecodeError {

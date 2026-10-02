@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use prost_types::field_descriptor_proto::{Label, Type as FieldType};
 use prost_types::{DescriptorProto, EnumDescriptorProto, FieldDescriptorProto, FileDescriptorSet};
@@ -24,6 +24,9 @@ pub enum Scalar {
     Bool,
     String,
     Bytes,
+    /// `bytes` configured with `fixed_bytes`: exactly this many bytes, checked at parse
+    /// and exposed as `[u8; N]`.
+    FixedBytes(u32),
 }
 
 /// A resolved reference to a generated message or enum type.
@@ -92,7 +95,7 @@ pub struct Message {
     /// Module holding this message's nested types and oneof enums, as `prost` lays them
     /// out: `module` plus the message's `snake_case` name.
     pub nested_module: Vec<String>,
-    /// Whether this is a map entry synthesized by protoc. Entries get a lens, used to
+    /// Whether this is a map entry synthesized by protoc. Entries get a view, used to
     /// validate them, but are hidden from documentation as `prost` hides them entirely.
     pub map_entry: bool,
     /// Fields outside any real `oneof`, in declaration order.
@@ -150,7 +153,12 @@ impl Model {
     ///
     /// [`Error::UnsupportedField`] for group fields. [`Error::UnresolvedType`] if a
     /// field's `type_name` does not name a message or enum declared in `set`.
-    pub fn build(set: &FileDescriptorSet) -> Result<Self, Error> {
+    /// [`Error::InvalidFixedBytes`] if a `fixed_bytes` path names no field, a field that
+    /// is not `bytes`, or a map field or entry.
+    pub fn build(
+        set: &FileDescriptorSet,
+        fixed_bytes: &BTreeMap<String, u32>,
+    ) -> Result<Self, Error> {
         let mut types = HashMap::new();
         for file in &set.file {
             let package = module_path(file.package());
@@ -170,14 +178,32 @@ impl Model {
             messages: Vec::new(),
             enums: Vec::new(),
         };
+        let mut context = BuildContext {
+            types: &types,
+            fixed_bytes,
+            matched: BTreeSet::new(),
+        };
         for file in &set.file {
             let package = module_path(file.package());
+            let prefix = match file.package() {
+                "" => String::new(),
+                package => format!(".{package}"),
+            };
             for descriptor in &file.message_type {
-                model.add_message(descriptor, &package, &package, &types)?;
+                model.add_message(descriptor, &prefix, &package, &package, &mut context)?;
             }
             for descriptor in &file.enum_type {
                 model.enums.push(build_enum(descriptor, &package, &package));
             }
+        }
+        if let Some(path) = fixed_bytes
+            .keys()
+            .find(|path| !context.matched.contains(*path))
+        {
+            return Err(Error::InvalidFixedBytes {
+                path: path.clone(),
+                reason: "no field has this fully-qualified name",
+            });
         }
         Ok(model)
     }
@@ -186,13 +212,21 @@ impl Model {
     fn add_message(
         &mut self,
         descriptor: &DescriptorProto,
+        prefix: &str,
         package: &[String],
         module: &[String],
-        types: &HashMap<String, TypeInfo>,
+        context: &mut BuildContext<'_>,
     ) -> Result<(), Error> {
-        let message = build_message(descriptor, package, module, types)?;
+        let proto_name = format!("{prefix}.{}", descriptor.name());
+        let message = build_message(descriptor, &proto_name, package, module, context)?;
         for nested in &descriptor.nested_type {
-            self.add_message(nested, package, &message.nested_module, types)?;
+            self.add_message(
+                nested,
+                &proto_name,
+                package,
+                &message.nested_module,
+                context,
+            )?;
         }
         for nested in &descriptor.enum_type {
             self.enums
@@ -311,14 +345,28 @@ fn strip_enum_prefix(enum_name: &str, variant: &str) -> String {
     }
 }
 
+/// State shared across one [`Model::build`].
+struct BuildContext<'a> {
+    types: &'a HashMap<String, TypeInfo>,
+    /// `fixed_bytes` configuration: fully-qualified field path to length.
+    fixed_bytes: &'a BTreeMap<String, u32>,
+    /// The configured paths that matched a field, to report the ones that did not.
+    matched: BTreeSet<String>,
+}
+
 fn build_message(
     descriptor: &DescriptorProto,
+    proto_name: &str,
     package: &[String],
     module: &[String],
-    types: &HashMap<String, TypeInfo>,
+    context: &mut BuildContext<'_>,
 ) -> Result<Message, Error> {
     let rust_name = upper_camel(descriptor.name());
     let message_name = descriptor.name();
+    let map_entry = descriptor
+        .options
+        .as_ref()
+        .is_some_and(|options| options.map_entry());
 
     let mut fields = Vec::with_capacity(descriptor.field.len());
     // Keyed by `oneof_index`, so oneofs come out in declaration order.
@@ -329,12 +377,18 @@ fn build_message(
         let optional = field.proto3_optional();
         let oneof_index = field.oneof_index.filter(|_| !optional);
 
+        let mut kind = field_kind(field, message_name, context.types)?;
+        let path = format!("{proto_name}.{}", field.name());
+        if let Some(&len) = context.fixed_bytes.get(&path) {
+            kind = fixed_bytes_kind(&path, len, kind, map_entry)?;
+            context.matched.insert(path);
+        }
         let field = Field {
             name: field.name().to_string(),
             number: field.number() as u32,
             repeated: field.label() == Label::Repeated,
             optional,
-            kind: field_kind(field, message_name, types)?,
+            kind,
         };
         match oneof_index {
             Some(index) => oneof_members.entry(index).or_default().push(field),
@@ -359,13 +413,36 @@ fn build_message(
         rust_name,
         package: package.to_vec(),
         module: module.to_vec(),
-        map_entry: descriptor
-            .options
-            .as_ref()
-            .is_some_and(|options| options.map_entry()),
+        map_entry,
         fields,
         oneofs,
     })
+}
+
+/// Applies a `fixed_bytes` configuration to the field at `path`.
+///
+/// # Errors
+///
+/// [`Error::InvalidFixedBytes`] unless the field is a plain, optional, repeated or oneof
+/// `bytes` field outside a map.
+fn fixed_bytes_kind(
+    path: &str,
+    len: u32,
+    kind: FieldKind,
+    in_map_entry: bool,
+) -> Result<FieldKind, Error> {
+    let invalid = |reason| Error::InvalidFixedBytes {
+        path: path.to_string(),
+        reason,
+    };
+    if in_map_entry {
+        return Err(invalid("map keys and values cannot be fixed_bytes"));
+    }
+    match kind {
+        FieldKind::Scalar(Scalar::Bytes) => Ok(FieldKind::Scalar(Scalar::FixedBytes(len))),
+        FieldKind::Map(_) => Err(invalid("map fields cannot be fixed_bytes")),
+        _ => Err(invalid("only `bytes` fields can be fixed_bytes")),
+    }
 }
 
 /// Resolves what a field carries.

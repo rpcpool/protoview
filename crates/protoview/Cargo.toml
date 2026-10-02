@@ -1,0 +1,10 @@
+[package]
+name = "protoview"
+version = "0.1.0"
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+readme.workspace = true
+description = "Runtime for protoview-build: zero-copy, allocation-free protobuf view types"
+
+[dependencies]

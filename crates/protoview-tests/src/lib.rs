@@ -1,4 +1,4 @@
-//! Compiles `proto/` with `proto-codec-gen` and exercises the result.
+//! Compiles `proto/` with `protoview-build` and exercises the result.
 //!
 //! Not published: generated code that fails to compile is the most likely failure
 //! mode for a codegen crate, and the only way to catch it is to generate and compile
@@ -12,6 +12,9 @@ pub mod fixtures {
     }
     pub mod enums {
         include!(concat!(env!("OUT_DIR"), "/fixtures.enums.rs"));
+    }
+    pub mod fixed {
+        include!(concat!(env!("OUT_DIR"), "/fixtures.fixed.rs"));
     }
     pub mod maps {
         include!(concat!(env!("OUT_DIR"), "/fixtures.maps.rs"));
@@ -37,6 +40,14 @@ pub mod google {
         include!(concat!(env!("OUT_DIR"), "/google.protobuf.rs"));
     }
 }
+pub mod shop {
+    pub mod common {
+        include!(concat!(env!("OUT_DIR"), "/shop.common.rs"));
+    }
+    pub mod orders {
+        include!(concat!(env!("OUT_DIR"), "/shop.orders.rs"));
+    }
+}
 pub mod solana {
     pub mod storage {
         pub mod confirmed_block {
@@ -53,7 +64,11 @@ mod all_types_tests;
 #[cfg(test)]
 mod enums_maps_tests;
 #[cfg(test)]
+mod fixed_bytes_tests;
+#[cfg(test)]
 mod oneof_tests;
+#[cfg(test)]
+mod readme_tests;
 #[cfg(test)]
 mod yellowstone_tests;
 
@@ -113,7 +128,7 @@ mod tests {
 #[cfg(test)]
 mod repeated_tests {
     use super::fixtures::repeated::{Collection, Tree};
-    use proto_codec::{DecodeError, MAX_DEPTH, WireType};
+    use protoview::{DecodeError, MAX_DEPTH, WireType};
 
     fn varint(mut value: u64, out: &mut Vec<u8>) {
         while value >= 0x80 {

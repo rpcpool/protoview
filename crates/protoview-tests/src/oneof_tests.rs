@@ -1,7 +1,7 @@
 //! Hand-encoded `oneof` layouts: every member shape, last-wins across members, and members
 //! interleaved with other fields.
 
-use proto_codec::{DecodeError, WireType};
+use protoview::{DecodeError, WireType};
 
 use crate::fixtures::oneof::Choice;
 use crate::fixtures::oneof::choice::{Mode, Value};

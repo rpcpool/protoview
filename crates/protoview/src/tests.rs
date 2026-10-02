@@ -304,3 +304,22 @@ fn map_entry_offsets_take_the_last_key_and_value() {
     assert_eq!(entry_offsets(&[]), (0, 0));
     assert_eq!(entry_offsets(&[0x08, 0x05]).1, 0);
 }
+
+#[test]
+fn fixed_bytes_length_is_checked_exactly() {
+    use crate::wire::{expect_fixed_len, read_fixed_bytes};
+    let buf = [0x0a, 0x03, 1, 2, 3];
+    let field = Scanner::new(&buf).unwrap().next_field().unwrap().unwrap();
+    assert_eq!(expect_fixed_len(&buf, &field, 3), Ok(()));
+    assert_eq!(
+        expect_fixed_len(&buf, &field, 4),
+        Err(DecodeError::FixedBytesLenMismatch {
+            field: 1,
+            expected: 4,
+            actual: 3
+        })
+    );
+    assert_eq!(read_fixed_bytes::<3>(&buf, 1), Some([1, 2, 3]));
+    assert_eq!(read_fixed_bytes::<2>(&buf, 1), None);
+    assert_eq!(read_fixed_bytes::<4>(&buf, 1), None);
+}

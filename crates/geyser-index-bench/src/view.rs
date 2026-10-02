@@ -1,4 +1,4 @@
-//! Lenses generated from `proto/yellowstone/`, one `include!` per proto package.
+//! Views generated from `proto/yellowstone/`, one `include!` per proto package.
 //!
 //! The module tree mirrors the package hierarchy, which the generated `super::` paths
 //! between packages rely on.

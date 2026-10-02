@@ -3,7 +3,7 @@
 use std::fmt::{self, Write as _};
 use std::time::Duration;
 
-use proto_codec::DecodeError;
+use protoview::DecodeError;
 
 use crate::measure::{Sample, UpdateKind};
 
@@ -135,7 +135,7 @@ impl Histogram {
 /// Everything recorded for one [`UpdateKind`].
 #[derive(Clone)]
 struct KindStats {
-    lens: Histogram,
+    view: Histogram,
     prost: Histogram,
     bytes: u64,
 }
@@ -148,7 +148,7 @@ impl KindStats {
     /// A [`KindStats`] with no samples.
     fn new() -> Self {
         Self {
-            lens: Histogram::new(),
+            view: Histogram::new(),
             prost: Histogram::new(),
             bytes: 0,
         }
@@ -160,7 +160,7 @@ impl KindStats {
     ///
     /// The sample count.
     const fn count(&self) -> u64 {
-        self.lens.count
+        self.view.count
     }
 
     /// Folds `other` into `self`.
@@ -170,7 +170,7 @@ impl KindStats {
     /// * `other` - Statistics to add.
     fn merge(&mut self, other: &Self) {
         for (histogram, other) in [
-            (&mut self.lens, &other.lens),
+            (&mut self.view, &other.view),
             (&mut self.prost, &other.prost),
         ] {
             for (bucket, n) in histogram.buckets.iter_mut().zip(other.buckets.iter()) {
@@ -220,14 +220,14 @@ impl Stats {
     /// * `sample` - The [`Sample`] to record.
     pub fn record(&mut self, sample: &Sample) {
         let kind = &mut self.kinds[sample.kind.index()];
-        kind.lens.record(sample.lens_ns);
+        kind.view.record(sample.view_ns);
         if let Some(prost_ns) = sample.prost_ns {
             kind.prost.record(prost_ns);
         }
         kind.bytes += sample.size as u64;
     }
 
-    /// Records an update the lens rejected.
+    /// Records an update the view rejected.
     ///
     /// # Arguments
     ///
@@ -313,22 +313,22 @@ impl Stats {
             .filter(|(_, stats)| stats.count() > 0)
             .chain((total.count() > 0).then_some(("TOTAL", &total)));
         for (label, stats) in rows {
-            let lens = &stats.lens;
+            let view = &stats.view;
             write!(
                 out,
                 "{:<20} {:>9} {:>9} | {:>8} {:>8} {:>8} {:>8} {:>10}",
                 label,
                 stats.count(),
                 bytes(stats.bytes as f64 / stats.count() as f64),
-                nanos(lens.percentile(50.0)),
-                nanos(lens.percentile(90.0)),
-                nanos(lens.percentile(99.0)),
-                nanos(lens.max),
-                throughput(stats.bytes, lens.sum()),
+                nanos(view.percentile(50.0)),
+                nanos(view.percentile(90.0)),
+                nanos(view.percentile(99.0)),
+                nanos(view.max),
+                throughput(stats.bytes, view.sum()),
             )?;
             if self.compare_prost {
                 let prost = &stats.prost;
-                let speedup = prost.percentile(50.0) as f64 / lens.percentile(50.0).max(1) as f64;
+                let speedup = prost.percentile(50.0) as f64 / view.percentile(50.0).max(1) as f64;
                 write!(
                     out,
                     " | {:>8} {:>8} {:>10} {:>6.1}x",
@@ -344,7 +344,7 @@ impl Stats {
         if let Some(error) = self.first_error {
             writeln!(
                 out,
-                "{} updates rejected by the lens; first error: {error}",
+                "{} updates rejected by the view; first error: {error}",
                 self.parse_errors
             )?;
         }

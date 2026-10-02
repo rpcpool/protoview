@@ -5,7 +5,7 @@
 use std::collections::HashMap;
 
 use prost::Message as _;
-use proto_codec::{DecodeError, WireType};
+use protoview::{DecodeError, WireType};
 
 use crate::fixtures::enums::palette::{self, Shade, Swatch};
 use crate::fixtures::enums::{Aliased, Color, HasUnknown, Level, Palette};
@@ -169,22 +169,22 @@ fn swatch(color: pb::Color, shade: i32, text: Option<&str>) -> pb::Swatch {
     }
 }
 
-fn assert_swatch(lens: &Swatch<&[u8]>, expected: &pb::Swatch) {
+fn assert_swatch(view: &Swatch<&[u8]>, expected: &pb::Swatch) {
     let pb::Swatch {
         color,
         shade,
         label,
     } = expected;
-    assert_eq!(lens.color().to_i32(), *color);
-    assert_eq!(lens.shade().to_i32(), *shade);
-    match (lens.label(), label) {
-        (Some(lens), Some(expected)) => assert_eq!(lens.text().unwrap(), expected.text),
+    assert_eq!(view.color().to_i32(), *color);
+    assert_eq!(view.shade().to_i32(), *shade);
+    match (view.label(), label) {
+        (Some(view), Some(expected)) => assert_eq!(view.text().unwrap(), expected.text),
         (None, None) => {}
         _ => panic!("label presence mismatch"),
     }
 }
 
-fn assert_palette(lens: &Palette<&[u8]>, expected: &pb::Palette) {
+fn assert_palette(view: &Palette<&[u8]>, expected: &pb::Palette) {
     let pb::Palette {
         primary,
         accent,
@@ -196,45 +196,45 @@ fn assert_palette(lens: &Palette<&[u8]>, expected: &pb::Palette) {
         aliased,
         flagged,
     } = expected;
-    assert_eq!(lens.primary().to_i32(), *primary, "primary");
-    assert_eq!(lens.accent().map(Color::to_i32), *accent, "accent");
+    assert_eq!(view.primary().to_i32(), *primary, "primary");
+    assert_eq!(view.accent().map(Color::to_i32), *accent, "accent");
     assert_eq!(
-        lens.history().map(Color::to_i32).collect::<Vec<_>>(),
+        view.history().map(Color::to_i32).collect::<Vec<_>>(),
         *history,
         "history"
     );
-    assert_eq!(lens.shade().to_i32(), *shade, "shade");
-    match (lens.swatch(), swatch) {
-        (Some(lens), Some(expected)) => assert_swatch(&lens, expected),
+    assert_eq!(view.shade().to_i32(), *shade, "shade");
+    match (view.swatch(), swatch) {
+        (Some(view), Some(expected)) => assert_swatch(&view, expected),
         (None, None) => {}
         _ => panic!("swatch presence mismatch"),
     }
-    let lens_swatches: Vec<_> = lens.swatches().collect();
-    assert_eq!(lens_swatches.len(), swatches.len());
-    for (lens, expected) in lens_swatches.iter().zip(swatches) {
-        assert_swatch(lens, expected);
+    let view_swatches: Vec<_> = view.swatches().collect();
+    assert_eq!(view_swatches.len(), swatches.len());
+    for (view, expected) in view_swatches.iter().zip(swatches) {
+        assert_swatch(view, expected);
     }
-    match (lens.pick(), pick) {
+    match (view.pick(), pick) {
         (None, None) => {}
-        (Some(palette::Pick::PickedColor(lens)), Some(pb::Pick::PickedColor(expected))) => {
-            assert_eq!(lens.to_i32(), *expected)
+        (Some(palette::Pick::PickedColor(view)), Some(pb::Pick::PickedColor(expected))) => {
+            assert_eq!(view.to_i32(), *expected)
         }
-        (Some(palette::Pick::PickedLevel(lens)), Some(pb::Pick::PickedLevel(expected))) => {
-            assert_eq!(lens.to_i32(), *expected)
+        (Some(palette::Pick::PickedLevel(view)), Some(pb::Pick::PickedLevel(expected))) => {
+            assert_eq!(view.to_i32(), *expected)
         }
-        (Some(palette::Pick::PickedLabel(lens)), Some(pb::Pick::PickedLabel(expected))) => {
-            assert_eq!(lens.text().unwrap(), expected.text)
+        (Some(palette::Pick::PickedLabel(view)), Some(pb::Pick::PickedLabel(expected))) => {
+            assert_eq!(view.text().unwrap(), expected.text)
         }
         _ => panic!("pick mismatch"),
     }
-    assert_eq!(lens.aliased().to_i32(), *aliased, "aliased");
-    assert_eq!(lens.flagged().to_i32(), *flagged, "flagged");
+    assert_eq!(view.aliased().to_i32(), *aliased, "aliased");
+    assert_eq!(view.flagged().to_i32(), *flagged, "flagged");
 }
 
 fn round_trip_palette(expected: &pb::Palette) {
     let bytes = expected.encode_to_vec();
-    let lens = Palette::parse(bytes.as_slice()).unwrap();
-    assert_palette(&lens, expected);
+    let view = Palette::parse(bytes.as_slice()).unwrap();
+    assert_palette(&view, expected);
 }
 
 #[test]
@@ -276,40 +276,40 @@ fn undeclared_values_survive_every_position() {
         ..Default::default()
     };
     let bytes = expected.encode_to_vec();
-    let lens = Palette::parse(bytes.as_slice()).unwrap();
-    assert_eq!(lens.primary(), Color::Unknown(42));
-    assert_eq!(lens.accent(), Some(Color::Unknown(-7)));
-    assert_eq!(lens.history().collect::<Vec<_>>(), [Color::Unknown(99)]);
-    assert_eq!(lens.shade(), Shade::Unknown(3));
-    assert_eq!(lens.swatch().unwrap().shade(), Shade::Unknown(9));
-    assert_eq!(lens.flagged(), HasUnknown::Unrecognized(9));
+    let view = Palette::parse(bytes.as_slice()).unwrap();
+    assert_eq!(view.primary(), Color::Unknown(42));
+    assert_eq!(view.accent(), Some(Color::Unknown(-7)));
+    assert_eq!(view.history().collect::<Vec<_>>(), [Color::Unknown(99)]);
+    assert_eq!(view.shade(), Shade::Unknown(3));
+    assert_eq!(view.swatch().unwrap().shade(), Shade::Unknown(9));
+    assert_eq!(view.flagged(), HasUnknown::Unrecognized(9));
 }
 
 #[test]
 fn absent_enums_default_and_optional_enums_have_presence() {
-    let lens = Palette::parse(&[][..]).unwrap();
-    assert_eq!(lens.primary(), Color::Unspecified);
-    assert_eq!(lens.accent(), None);
-    assert_eq!(lens.history().count(), 0);
-    assert_eq!(lens.shade(), Shade::Light);
-    assert!(lens.pick().is_none());
+    let view = Palette::parse(&[][..]).unwrap();
+    assert_eq!(view.primary(), Color::Unspecified);
+    assert_eq!(view.accent(), None);
+    assert_eq!(view.history().count(), 0);
+    assert_eq!(view.shade(), Shade::Light);
+    assert!(view.pick().is_none());
 
     let bytes = pb::Palette {
         accent: Some(0),
         ..Default::default()
     }
     .encode_to_vec();
-    let lens = Palette::parse(bytes.as_slice()).unwrap();
-    assert_eq!(lens.accent(), Some(Color::Unspecified));
+    let view = Palette::parse(bytes.as_slice()).unwrap();
+    assert_eq!(view.accent(), Some(Color::Unspecified));
 }
 
 #[test]
 fn repeated_enums_merge_packed_and_unpacked() {
     // history (3): packed [1, 2], then unpacked 42, then packed [0].
     let bytes = [0x1a, 0x02, 0x01, 0x02, 0x18, 0x2a, 0x1a, 0x01, 0x00];
-    let lens = Palette::parse(&bytes[..]).unwrap();
+    let view = Palette::parse(&bytes[..]).unwrap();
     assert_eq!(
-        lens.history().collect::<Vec<_>>(),
+        view.history().collect::<Vec<_>>(),
         [
             Color::Red,
             Color::Green,
@@ -372,7 +372,7 @@ fn populated_maps() -> pb::Maps {
     }
 }
 
-fn assert_maps(lens: &Maps<&[u8]>, expected: &pb::Maps) {
+fn assert_maps(view: &Maps<&[u8]>, expected: &pb::Maps) {
     let pb::Maps {
         labels,
         by_id,
@@ -384,13 +384,13 @@ fn assert_maps(lens: &Maps<&[u8]>, expected: &pb::Maps) {
         between,
         wide,
     } = expected;
-    let got: HashMap<String, String> = lens
+    let got: HashMap<String, String> = view
         .labels()
         .map(|(k, v)| (k.unwrap().to_owned(), v.unwrap().to_owned()))
         .collect();
     assert_eq!(&got, labels, "labels");
 
-    let got: HashMap<i32, (u32, String)> = lens
+    let got: HashMap<i32, (u32, String)> = view
         .by_id()
         .map(|(k, v)| (k, (v.id(), v.name().unwrap().to_owned())))
         .collect();
@@ -400,16 +400,16 @@ fn assert_maps(lens: &Maps<&[u8]>, expected: &pb::Maps) {
         .collect();
     assert_eq!(got, want, "by_id");
 
-    let got: HashMap<u64, Vec<u8>> = lens.blobs().map(|(k, v)| (k, v.to_vec())).collect();
+    let got: HashMap<u64, Vec<u8>> = view.blobs().map(|(k, v)| (k, v.to_vec())).collect();
     assert_eq!(&got, blobs, "blobs");
 
-    let got: HashMap<i64, f64> = lens.scores().collect();
+    let got: HashMap<i64, f64> = view.scores().collect();
     assert_eq!(&got, scores, "scores");
 
-    let got: HashMap<bool, i32> = lens.flags().map(|(k, v)| (k, v.to_i32())).collect();
+    let got: HashMap<bool, i32> = view.flags().map(|(k, v)| (k, v.to_i32())).collect();
     assert_eq!(&got, flags, "flags");
 
-    let got: HashMap<u32, (f64, u32, String, String)> = lens
+    let got: HashMap<u32, (f64, u32, String, String)> = view
         .foreign()
         .map(|(k, v)| {
             let fields = (
@@ -427,15 +427,15 @@ fn assert_maps(lens: &Maps<&[u8]>, expected: &pb::Maps) {
         .collect();
     assert_eq!(got, want, "foreign");
 
-    let got: HashMap<String, i64> = lens
+    let got: HashMap<String, i64> = view
         .counters()
         .map(|(k, v)| (k.unwrap().to_owned(), v))
         .collect();
     assert_eq!(&got, counters, "counters");
 
-    assert_eq!(lens.between(), *between, "between");
+    assert_eq!(view.between(), *between, "between");
 
-    let got: HashMap<i64, u32> = lens.wide().collect();
+    let got: HashMap<i64, u32> = view.wide().collect();
     assert_eq!(&got, wide, "wide");
 }
 
@@ -443,8 +443,8 @@ fn assert_maps(lens: &Maps<&[u8]>, expected: &pb::Maps) {
 fn maps_round_trip_through_prost() {
     for expected in [populated_maps(), pb::Maps::default()] {
         let bytes = expected.encode_to_vec();
-        let lens = Maps::parse(bytes.as_slice()).unwrap();
-        assert_maps(&lens, &expected);
+        let view = Maps::parse(bytes.as_slice()).unwrap();
+        assert_maps(&view, &expected);
     }
 }
 
@@ -459,8 +459,8 @@ fn concatenated_encodings_interleave_entries() {
     let mut bytes = first.encode_to_vec();
     bytes.extend(second.encode_to_vec());
 
-    let lens = Maps::parse(bytes.as_slice()).unwrap();
-    let env: Vec<&str> = lens
+    let view = Maps::parse(bytes.as_slice()).unwrap();
+    let env: Vec<&str> = view
         .labels()
         .filter(|(k, _)| *k == Ok("env"))
         .map(|(_, v)| v.unwrap())
@@ -469,7 +469,7 @@ fn concatenated_encodings_interleave_entries() {
 
     let mut merged = first.clone();
     merged.merge(second.encode_to_vec().as_slice()).unwrap();
-    assert_maps(&lens, &merged);
+    assert_maps(&view, &merged);
 }
 
 fn varint(mut value: u64, out: &mut Vec<u8>) {
@@ -495,19 +495,19 @@ fn entries_missing_key_or_value_read_as_defaults() {
     len_delim(2, &[0x08, 0x05], &mut msg); // by_id: key 5, no value message
     len_delim(5, &[0x08, 0x01], &mut msg); // flags: key true, no value
 
-    let lens = Maps::parse(msg.as_slice()).unwrap();
-    let labels: Vec<(&str, &str)> = lens
+    let view = Maps::parse(msg.as_slice()).unwrap();
+    let labels: Vec<(&str, &str)> = view
         .labels()
         .map(|(k, v)| (k.unwrap(), v.unwrap()))
         .collect();
     assert_eq!(labels, [("", "v"), ("k", ""), ("", "")]);
 
-    let (key, value) = lens.by_id().next().unwrap();
+    let (key, value) = view.by_id().next().unwrap();
     assert_eq!(key, 5);
     assert_eq!((value.id(), value.name().unwrap()), (0, ""));
 
     assert_eq!(
-        lens.flags().collect::<Vec<_>>(),
+        view.flags().collect::<Vec<_>>(),
         [(true, Color::Unspecified)]
     );
 }
@@ -520,8 +520,8 @@ fn entry_fields_may_repeat_reorder_and_carry_unknowns() {
     ];
     let mut msg = Vec::new();
     len_delim(1, &entry, &mut msg);
-    let lens = Maps::parse(msg.as_slice()).unwrap();
-    let labels: Vec<_> = lens
+    let view = Maps::parse(msg.as_slice()).unwrap();
+    let labels: Vec<_> = view
         .labels()
         .map(|(k, v)| (k.unwrap(), v.unwrap()))
         .collect();

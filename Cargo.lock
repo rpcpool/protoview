@@ -195,16 +195,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1c133bc6a41be0d194c306b5506d15e6feeea7b1d6604bd3f8310dfb2ca96486"
 
 [[package]]
-name = "codec-tests"
-version = "0.1.0"
-dependencies = [
- "prost",
- "proto-codec",
- "proto-codec-gen",
- "yellowstone-grpc-proto",
-]
-
-[[package]]
 name = "colorchoice"
 version = "1.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -404,15 +394,15 @@ dependencies = [
 ]
 
 [[package]]
-name = "geyser-index-bench"
+name = "geyser-bench"
 version = "0.1.0"
 dependencies = [
  "bytes",
  "clap",
  "dotenvy",
  "prost",
- "proto-codec",
- "proto-codec-gen",
+ "protoview",
+ "protoview-build",
  "thiserror",
  "tokio",
  "tokio-stream",
@@ -919,18 +909,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "proto-codec"
-version = "0.1.0"
-
-[[package]]
-name = "proto-codec-gen"
-version = "0.1.0"
-dependencies = [
- "prost-types",
- "protox",
-]
-
-[[package]]
 name = "protoc-bin-vendored"
 version = "3.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -993,6 +971,29 @@ name = "protoc-bin-vendored-win32"
 version = "3.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "95067976aca6421a523e491fce939a3e65249bac4b977adee0ee9771568e8aa3"
+
+[[package]]
+name = "protoview"
+version = "0.1.0"
+
+[[package]]
+name = "protoview-build"
+version = "0.1.0"
+dependencies = [
+ "prost-types",
+ "protox",
+]
+
+[[package]]
+name = "protoview-tests"
+version = "0.1.0"
+dependencies = [
+ "bytes",
+ "prost",
+ "protoview",
+ "protoview-build",
+ "yellowstone-grpc-proto",
+]
 
 [[package]]
 name = "protox"

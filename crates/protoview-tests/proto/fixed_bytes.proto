@@ -1,0 +1,22 @@
+// `bytes` fields configured with `fixed_bytes` in build.rs, in every position it allows:
+// plain, optional, repeated, oneof member, and inside a nested message. `free` is left
+// unconfigured to show it stays `&[u8]`.
+syntax = "proto3";
+
+package fixtures.fixed;
+
+message Account {
+    message Owner {
+        bytes key = 1;          // fixed 16
+    }
+
+    bytes pubkey = 1;           // fixed 32
+    optional bytes signature = 2; // fixed 64
+    repeated bytes history = 3; // fixed 32
+    oneof id {
+        bytes hash = 4;         // fixed 8
+        string name = 5;
+    }
+    bytes free = 6;
+    Owner owner = 7;
+}

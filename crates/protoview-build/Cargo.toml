@@ -1,0 +1,12 @@
+[package]
+name = "protoview-build"
+version = "0.1.0"
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+readme.workspace = true
+description = "Build-time protobuf code generator emitting zero-copy, validate-once view types"
+
+[dependencies]
+prost-types = { workspace = true }
+protox = { workspace = true }

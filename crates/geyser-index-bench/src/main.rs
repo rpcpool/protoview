@@ -1,5 +1,5 @@
-//! Subscribes to a Yellowstone gRPC endpoint and measures how long the `proto-codec`
-//! lenses take to index each incoming `SubscribeUpdate`, optionally next to a `prost`
+//! Subscribes to a Yellowstone gRPC endpoint and measures how long the `protoview`
+//! views take to index each incoming `SubscribeUpdate`, optionally next to a `prost`
 //! decode of the same bytes.
 //!
 //! Reads `GRPC_ENDPOINT` (required) and `X_TOKEN` (optional) from the environment, after
@@ -8,11 +8,11 @@
 mod client;
 mod codec;
 // Generated API: the binary uses only the getters it needs to classify updates.
-#[allow(dead_code)]
-mod lens;
 mod measure;
 mod request;
 mod stats;
+#[allow(dead_code)]
+mod view;
 
 use std::env;
 use std::future;
@@ -29,7 +29,7 @@ use crate::measure::{Timer, UpdateKind};
 use crate::request::Stream;
 use crate::stats::Stats;
 
-/// Benchmark lens indexing of live Yellowstone gRPC `SubscribeUpdate`s.
+/// Benchmark view indexing of live Yellowstone gRPC `SubscribeUpdate`s.
 #[derive(Debug, Parser)]
 #[command(name = "geyser-index-bench", version, about)]
 struct Cli {

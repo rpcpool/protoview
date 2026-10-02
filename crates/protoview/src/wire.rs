@@ -307,3 +307,48 @@ pub fn descend(depth: u32) -> Result<u32, DecodeError> {
         Err(DecodeError::RecursionLimitExceeded)
     }
 }
+
+/// Checks that a length-delimited field holds exactly `expected` bytes, as a field
+/// configured with `fixed_bytes` must.
+///
+/// # Arguments
+///
+/// * `buf` - The buffer `field` was located in.
+/// * `field` - The field, as located by a [`Scanner`] over `buf`.
+/// * `expected` - The configured length.
+///
+/// # Returns
+///
+/// `Ok(())` when the payload is exactly `expected` bytes long.
+///
+/// # Errors
+///
+/// [`DecodeError::FixedBytesLenMismatch`] for any other length, and any error from
+/// reading the length prefix.
+pub fn expect_fixed_len(buf: &[u8], field: &Field, expected: u32) -> Result<(), DecodeError> {
+    let actual = read_length_delimited(buf, field.payload as usize)?.len();
+    if actual == expected as usize {
+        Ok(())
+    } else {
+        Err(DecodeError::FixedBytesLenMismatch {
+            field: field.number,
+            expected,
+            actual: u32::try_from(actual).unwrap_or(u32::MAX),
+        })
+    }
+}
+
+/// Reads a length-delimited payload that must be exactly `N` bytes long.
+///
+/// # Arguments
+///
+/// * `buf` - The buffer to read from.
+/// * `payload` - Offset of the length prefix.
+///
+/// # Returns
+///
+/// The payload as an array, or [`None`] if it is not exactly `N` bytes or runs past the
+/// end of `buf`. Generated getters only call this on fields `parse` length-checked.
+pub fn read_fixed_bytes<const N: usize>(buf: &[u8], payload: usize) -> Option<[u8; N]> {
+    read_length_delimited(buf, payload).ok()?.try_into().ok()
+}

@@ -117,136 +117,136 @@ mod pb {
     }
 }
 
-fn assert_leaf<B: AsRef<[u8]>>(lens: &Leaf<B>, expected: &pb::Leaf) {
-    assert_eq!(lens.id(), expected.id);
-    assert_eq!(lens.name().unwrap(), expected.name);
-    assert_leaves(lens.children(), &expected.children);
+fn assert_leaf<B: AsRef<[u8]>>(view: &Leaf<B>, expected: &pb::Leaf) {
+    assert_eq!(view.id(), expected.id);
+    assert_eq!(view.name().unwrap(), expected.name);
+    assert_leaves(view.children(), &expected.children);
 }
 
-fn assert_leaf_opt<B: AsRef<[u8]>>(lens: Option<Leaf<B>>, expected: Option<&pb::Leaf>) {
-    match (lens, expected) {
-        (Some(lens), Some(expected)) => assert_leaf(&lens, expected),
+fn assert_leaf_opt<B: AsRef<[u8]>>(view: Option<Leaf<B>>, expected: Option<&pb::Leaf>) {
+    match (view, expected) {
+        (Some(view), Some(expected)) => assert_leaf(&view, expected),
         (None, None) => {}
-        (lens, expected) => panic!(
-            "presence mismatch: lens {}, expected {}",
-            lens.is_some(),
+        (view, expected) => panic!(
+            "presence mismatch: view {}, expected {}",
+            view.is_some(),
             expected.is_some()
         ),
     }
 }
 
-fn assert_leaves<B: AsRef<[u8]>>(lens: impl Iterator<Item = Leaf<B>>, expected: &[pb::Leaf]) {
-    let lens: Vec<_> = lens.collect();
-    assert_eq!(lens.len(), expected.len(), "element count");
-    for (lens, expected) in lens.iter().zip(expected) {
-        assert_leaf(lens, expected);
+fn assert_leaves<B: AsRef<[u8]>>(view: impl Iterator<Item = Leaf<B>>, expected: &[pb::Leaf]) {
+    let view: Vec<_> = view.collect();
+    assert_eq!(view.len(), expected.len(), "element count");
+    for (view, expected) in view.iter().zip(expected) {
+        assert_leaf(view, expected);
     }
 }
 
-/// Checks every getter of `lens` against the message it was encoded from.
-fn assert_all(lens: &AllTypes<&[u8]>, expected: &pb::AllTypes) {
-    assert_eq!(lens.f_double(), expected.f_double, "f_double");
-    assert_eq!(lens.o_double(), expected.o_double, "o_double");
+/// Checks every getter of `view` against the message it was encoded from.
+fn assert_all(view: &AllTypes<&[u8]>, expected: &pb::AllTypes) {
+    assert_eq!(view.f_double(), expected.f_double, "f_double");
+    assert_eq!(view.o_double(), expected.o_double, "o_double");
     assert_eq!(
-        lens.r_double().collect::<Vec<_>>(),
+        view.r_double().collect::<Vec<_>>(),
         expected.r_double,
         "r_double"
     );
-    assert_eq!(lens.f_float(), expected.f_float, "f_float");
-    assert_eq!(lens.o_float(), expected.o_float, "o_float");
+    assert_eq!(view.f_float(), expected.f_float, "f_float");
+    assert_eq!(view.o_float(), expected.o_float, "o_float");
     assert_eq!(
-        lens.r_float().collect::<Vec<_>>(),
+        view.r_float().collect::<Vec<_>>(),
         expected.r_float,
         "r_float"
     );
-    assert_eq!(lens.f_int32(), expected.f_int32, "f_int32");
-    assert_eq!(lens.o_int32(), expected.o_int32, "o_int32");
+    assert_eq!(view.f_int32(), expected.f_int32, "f_int32");
+    assert_eq!(view.o_int32(), expected.o_int32, "o_int32");
     assert_eq!(
-        lens.r_int32().collect::<Vec<_>>(),
+        view.r_int32().collect::<Vec<_>>(),
         expected.r_int32,
         "r_int32"
     );
-    assert_eq!(lens.f_int64(), expected.f_int64, "f_int64");
-    assert_eq!(lens.o_int64(), expected.o_int64, "o_int64");
+    assert_eq!(view.f_int64(), expected.f_int64, "f_int64");
+    assert_eq!(view.o_int64(), expected.o_int64, "o_int64");
     assert_eq!(
-        lens.r_int64().collect::<Vec<_>>(),
+        view.r_int64().collect::<Vec<_>>(),
         expected.r_int64,
         "r_int64"
     );
-    assert_eq!(lens.f_uint32(), expected.f_uint32, "f_uint32");
-    assert_eq!(lens.o_uint32(), expected.o_uint32, "o_uint32");
+    assert_eq!(view.f_uint32(), expected.f_uint32, "f_uint32");
+    assert_eq!(view.o_uint32(), expected.o_uint32, "o_uint32");
     assert_eq!(
-        lens.r_uint32().collect::<Vec<_>>(),
+        view.r_uint32().collect::<Vec<_>>(),
         expected.r_uint32,
         "r_uint32"
     );
-    assert_eq!(lens.f_uint64(), expected.f_uint64, "f_uint64");
-    assert_eq!(lens.o_uint64(), expected.o_uint64, "o_uint64");
+    assert_eq!(view.f_uint64(), expected.f_uint64, "f_uint64");
+    assert_eq!(view.o_uint64(), expected.o_uint64, "o_uint64");
     assert_eq!(
-        lens.r_uint64().collect::<Vec<_>>(),
+        view.r_uint64().collect::<Vec<_>>(),
         expected.r_uint64,
         "r_uint64"
     );
-    assert_eq!(lens.f_sint32(), expected.f_sint32, "f_sint32");
-    assert_eq!(lens.o_sint32(), expected.o_sint32, "o_sint32");
+    assert_eq!(view.f_sint32(), expected.f_sint32, "f_sint32");
+    assert_eq!(view.o_sint32(), expected.o_sint32, "o_sint32");
     assert_eq!(
-        lens.r_sint32().collect::<Vec<_>>(),
+        view.r_sint32().collect::<Vec<_>>(),
         expected.r_sint32,
         "r_sint32"
     );
-    assert_eq!(lens.f_sint64(), expected.f_sint64, "f_sint64");
-    assert_eq!(lens.o_sint64(), expected.o_sint64, "o_sint64");
+    assert_eq!(view.f_sint64(), expected.f_sint64, "f_sint64");
+    assert_eq!(view.o_sint64(), expected.o_sint64, "o_sint64");
     assert_eq!(
-        lens.r_sint64().collect::<Vec<_>>(),
+        view.r_sint64().collect::<Vec<_>>(),
         expected.r_sint64,
         "r_sint64"
     );
-    assert_eq!(lens.f_fixed32(), expected.f_fixed32, "f_fixed32");
-    assert_eq!(lens.o_fixed32(), expected.o_fixed32, "o_fixed32");
+    assert_eq!(view.f_fixed32(), expected.f_fixed32, "f_fixed32");
+    assert_eq!(view.o_fixed32(), expected.o_fixed32, "o_fixed32");
     assert_eq!(
-        lens.r_fixed32().collect::<Vec<_>>(),
+        view.r_fixed32().collect::<Vec<_>>(),
         expected.r_fixed32,
         "r_fixed32"
     );
-    assert_eq!(lens.f_fixed64(), expected.f_fixed64, "f_fixed64");
-    assert_eq!(lens.o_fixed64(), expected.o_fixed64, "o_fixed64");
+    assert_eq!(view.f_fixed64(), expected.f_fixed64, "f_fixed64");
+    assert_eq!(view.o_fixed64(), expected.o_fixed64, "o_fixed64");
     assert_eq!(
-        lens.r_fixed64().collect::<Vec<_>>(),
+        view.r_fixed64().collect::<Vec<_>>(),
         expected.r_fixed64,
         "r_fixed64"
     );
-    assert_eq!(lens.f_sfixed32(), expected.f_sfixed32, "f_sfixed32");
-    assert_eq!(lens.o_sfixed32(), expected.o_sfixed32, "o_sfixed32");
+    assert_eq!(view.f_sfixed32(), expected.f_sfixed32, "f_sfixed32");
+    assert_eq!(view.o_sfixed32(), expected.o_sfixed32, "o_sfixed32");
     assert_eq!(
-        lens.r_sfixed32().collect::<Vec<_>>(),
+        view.r_sfixed32().collect::<Vec<_>>(),
         expected.r_sfixed32,
         "r_sfixed32"
     );
-    assert_eq!(lens.f_sfixed64(), expected.f_sfixed64, "f_sfixed64");
-    assert_eq!(lens.o_sfixed64(), expected.o_sfixed64, "o_sfixed64");
+    assert_eq!(view.f_sfixed64(), expected.f_sfixed64, "f_sfixed64");
+    assert_eq!(view.o_sfixed64(), expected.o_sfixed64, "o_sfixed64");
     assert_eq!(
-        lens.r_sfixed64().collect::<Vec<_>>(),
+        view.r_sfixed64().collect::<Vec<_>>(),
         expected.r_sfixed64,
         "r_sfixed64"
     );
-    assert_eq!(lens.f_bool(), expected.f_bool, "f_bool");
-    assert_eq!(lens.o_bool(), expected.o_bool, "o_bool");
-    assert_eq!(lens.r_bool().collect::<Vec<_>>(), expected.r_bool, "r_bool");
-    assert_eq!(lens.f_string().unwrap(), expected.f_string);
+    assert_eq!(view.f_bool(), expected.f_bool, "f_bool");
+    assert_eq!(view.o_bool(), expected.o_bool, "o_bool");
+    assert_eq!(view.r_bool().collect::<Vec<_>>(), expected.r_bool, "r_bool");
+    assert_eq!(view.f_string().unwrap(), expected.f_string);
     assert_eq!(
-        lens.o_string().map(Result::unwrap),
+        view.o_string().map(Result::unwrap),
         expected.o_string.as_deref()
     );
     assert_eq!(
-        lens.r_string().collect::<Result<Vec<_>, _>>().unwrap(),
+        view.r_string().collect::<Result<Vec<_>, _>>().unwrap(),
         expected.r_string
     );
-    assert_eq!(lens.f_bytes(), expected.f_bytes.as_slice());
-    assert_eq!(lens.o_bytes(), expected.o_bytes.as_deref());
-    assert_eq!(lens.r_bytes().collect::<Vec<_>>(), expected.r_bytes);
-    assert_leaf_opt(lens.f_message(), expected.f_message.as_ref());
-    assert_leaf_opt(lens.o_message(), expected.o_message.as_ref());
-    assert_leaves(lens.r_message(), &expected.r_message);
+    assert_eq!(view.f_bytes(), expected.f_bytes.as_slice());
+    assert_eq!(view.o_bytes(), expected.o_bytes.as_deref());
+    assert_eq!(view.r_bytes().collect::<Vec<_>>(), expected.r_bytes);
+    assert_leaf_opt(view.f_message(), expected.f_message.as_ref());
+    assert_leaf_opt(view.o_message(), expected.o_message.as_ref());
+    assert_leaves(view.r_message(), &expected.r_message);
 }
 
 fn leaf(id: u32, name: &str, children: Vec<pb::Leaf>) -> pb::Leaf {
@@ -324,8 +324,8 @@ fn populated() -> pb::AllTypes {
 
 fn round_trip(expected: &pb::AllTypes) {
     let bytes = expected.encode_to_vec();
-    let lens = AllTypes::parse(bytes.as_slice()).unwrap();
-    assert_all(&lens, expected);
+    let view = AllTypes::parse(bytes.as_slice()).unwrap();
+    assert_all(&view, expected);
 }
 
 #[test]
@@ -335,12 +335,12 @@ fn every_field_populated() {
 
 #[test]
 fn empty_message_yields_defaults_none_and_empty() {
-    let lens = AllTypes::parse(&[][..]).unwrap();
-    assert_all(&lens, &pb::AllTypes::default());
-    assert_eq!(lens.f_string().unwrap(), "");
-    assert_eq!(lens.o_uint64(), None);
-    assert!(lens.f_message().is_none());
-    assert_eq!(lens.r_message().count(), 0);
+    let view = AllTypes::parse(&[][..]).unwrap();
+    assert_all(&view, &pb::AllTypes::default());
+    assert_eq!(view.f_string().unwrap(), "");
+    assert_eq!(view.o_uint64(), None);
+    assert!(view.f_message().is_none());
+    assert_eq!(view.r_message().count(), 0);
 }
 
 #[test]
@@ -397,10 +397,10 @@ fn repeated_messages_from_concatenated_encodings_interleave() {
     merged.merge(second.encode_to_vec().as_slice()).unwrap();
     assert_eq!(merged.r_message.len(), 3, "prost agrees on merge semantics");
 
-    let lens = AllTypes::parse(bytes.as_slice()).unwrap();
-    assert_all(&lens, &merged);
-    assert_eq!(lens.f_uint32(), 2);
-    assert_eq!(lens.r_uint32().collect::<Vec<_>>(), [1, 2, 3]);
+    let view = AllTypes::parse(bytes.as_slice()).unwrap();
+    assert_all(&view, &merged);
+    assert_eq!(view.f_uint32(), 2);
+    assert_eq!(view.r_uint32().collect::<Vec<_>>(), [1, 2, 3]);
 }
 
 #[test]
@@ -419,6 +419,6 @@ fn malformed_grandchild_in_repeated_message_fails_parse() {
 
     assert_eq!(
         AllTypes::parse(bytes.as_slice()).err(),
-        Some(proto_codec::DecodeError::UnexpectedEof)
+        Some(protoview::DecodeError::UnexpectedEof)
     );
 }

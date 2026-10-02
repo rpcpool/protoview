@@ -1,8 +1,8 @@
-# proto-codec-gen — design
+# protoview — design
 
 Status: agreed design, implementation in progress.
 
-A build-time protobuf code generator producing **zero-copy lens types**: decoders that
+A build-time protobuf code generator producing **zero-copy view types**: decoders that
 are views over a byte buffer rather than owned structs. Alternative to `prost` for
 read-heavy paths where full materialization is wasted work.
 
@@ -26,15 +26,15 @@ rather than silently miscompiling.
 
 | crate | role | dependencies |
 | --- | --- | --- |
-| `proto-codec-gen` | build-dependency; descriptors → Rust source | `protox`, `prost-types` |
-| `proto-codec` | runtime linked by generated code | **none**; `no_std` + `alloc` |
-| `codec-tests` | `publish = false`; build.rs generates `proto/`, `cargo test` compiles it | — |
+| `protoview-build` | build-dependency; descriptors → Rust source | `protox`, `prost-types` |
+| `protoview` | runtime linked by generated code | **none**; `no_std` + `alloc` |
+| `protoview-tests` | `publish = false`; build.rs generates `proto/`, `cargo test` compiles it | — |
 
 The runtime having **zero dependencies** is a deliberate, defended position and a real
 differentiator against `prost` (which pulls `bytes`). It is possible only because the
 container bound is `AsRef<[u8]>` rather than anything `bytes`-shaped. Guard it in CI.
 
-`codec-tests` exists because generated code that does not compile is the most likely
+`protoview-tests` exists because generated code that does not compile is the most likely
 failure mode, and the only way to catch it is to generate and compile the full corpus.
 
 ## Pipeline
@@ -73,7 +73,7 @@ manufacture a sub-`B`, so they borrow from the parent:
 fn account(&self) -> Option<SubscribeUpdateAccount<&'_ [u8]>>
 ```
 
-**Known trade:** nested lenses cannot detach from the parent buffer, so fanning a
+**Known trade:** nested views cannot detach from the parent buffer, so fanning a
 block's transactions out to worker threads needs the root kept alive (e.g. behind an
 `Arc`) or a copy. Recoverable later without breakage by adding a second impl block
 gated on a sliceable trait — new methods, no change to the struct bound:
@@ -97,8 +97,8 @@ it is a fraction of full decode, and it removes `Result` from every downstream c
 (except UTF-8 checks on strings).
 
 **Known trade:** there is no free-until-touched path. `parse` pays for a structural walk
-of every byte up front, and accessing a nested lens pays for a second, non-validating
-walk of that lens's own fields to index it. Iterating 5000 transactions means 5000
+of every byte up front, and accessing a nested view pays for a second, non-validating
+walk of that view's own fields to index it. Iterating 5000 transactions means 5000
 extra walks — still zero allocation and zero byte copying, so well ahead of `prost`, but
 not free.
 
@@ -132,7 +132,7 @@ Populating it during the walk:
 Validated recursively, indexed lazily. `parse` walks the whole message tree once —
 every nested message and repeated element, wire types of known fields, packed-run
 contents, and nesting depth up to `MAX_DEPTH` (100, as `prost`) — so nothing reachable
-from a parsed lens can fail. It does not keep the children's offsets: each nested lens
+from a parsed view can fail. It does not keep the children's offsets: each nested view
 re-indexes its own bytes, unvalidated, when accessed. Retaining a recursive index would
 allocate and would pay for all 5000 transactions of a block even when only one is read.
 
@@ -147,7 +147,7 @@ No allocation: `N` is known at codegen time, so the table is inline.
 | singular message | `fn account(&self) -> Option<AccountInfo<&'_ [u8]>>` — no default exists |
 | `string` | `fn name(&self) -> Result<&str, Utf8Error>` and `fn name_bytes(&self) -> &[u8]` |
 | `bytes` | `fn data(&self) -> &[u8]` |
-| `bytes` + `fixed_bytes` config | `fn pubkey(&self) -> [u8; 32]` — by value; length checked at parse |
+| `bytes` + `fixed_bytes` config | `fn pubkey(&self) -> [u8; 32]` — by value; length checked at parse. `Option<[u8; N]>` when `optional`, `Iterator<Item = [u8; N]>` when `repeated`, a `[u8; N]` variant in a oneof |
 | `repeated T` | `fn items(&self) -> impl Iterator<Item = T>`; strings yield `Result<&str, Utf8Error>` (plus `items_bytes()`), as the singular getter does |
 | `map<K, V>` | `fn m(&self) -> impl Iterator<Item = (K, V)>`, in wire order; a missing key or value reads as its default |
 | `oneof update_oneof` in `SubscribeUpdate` | `fn update_oneof(&self) -> Option<subscribe_update::UpdateOneof<'_>>`; the enum has one variant per member, named and placed as `prost` does, and a lifetime only if some member borrows |
@@ -212,13 +212,13 @@ emitted.
 write their own `From`.
 
 `extern_path` was considered and rejected: the types it would map to are prost-style
-owned structs, shape-incompatible with lenses, so the interop story does not work.
+owned structs, shape-incompatible with views, so the interop story does not work.
 
 ## build.rs API
 
 ```rust
-fn main() -> Result<(), proto_codec_gen::Error> {
-    proto_codec_gen::Config::new()
+fn main() -> Result<(), protoview_build::Error> {
+    protoview_build::Config::new()
         .include("proto")
         .fixed_bytes(".geyser.SubscribeUpdateAccountInfo.pubkey", 32)
         .fixed_bytes(".geyser.SubscribeUpdateAccountInfo.owner", 32)
@@ -247,16 +247,27 @@ field's length. A mismatch is rejected at `parse`, so `fn pubkey(&self) -> [u8; 
 stays infallible. Never pad or truncate: a silently zero-padded pubkey is a wrong-account
 bug that surfaces days later in someone else's system.
 
+That rule extends to absence. proto3 encodes an empty `bytes` value by omitting the field,
+so an absent plain field *is* a zero-length value, and `parse` rejects it with
+`FixedBytesLenMismatch { actual: 0 }` rather than returning `[0; N]`. A field that may
+legitimately be unset should be `optional` in the schema, which gives `Option<[u8; N]>`.
+
+Configuration mistakes are build errors, not no-ops: a path that matches no field, a
+field that is not `bytes`, a map field or a map entry's key or value, and a zero length
+all fail `compile` with `Error::InvalidFixedBytes` naming the path. Map values are left
+out for now: an entry missing its value reads as the default, which for a fixed length
+would again mean padding.
+
 A general `map_type(path, "my::Type")` via `TryFrom<&[u8]>` was dropped for exactly this
 reason — an arbitrary conversion cannot be validated at parse without running it twice or
-storing the result (at which point the lens is no longer a view). `[u8; N]` covers the
+storing the result (at which point it no longer just reads the bytes in place). `[u8; N]` covers the
 motivating cases (pubkeys, signatures, blockhashes, block UIDs) and
 `Pubkey::from(msg.pubkey())` is free. Addable later as `Result`-returning getters.
 
 ## Unsupported constructs
 
 **Accepted silently:** services (ignored), `reserved`, custom options, recursive message
-types (lenses are constructed lazily, so no infinite type), `google.protobuf.Any`
+types (views are constructed lazily, so no infinite type), `google.protobuf.Any`
 (structurally an ordinary message; no dynamic decoding, but nothing breaks).
 
 **Supported:** nested type declarations (`message Foo { message Bar {} }`), placed in a
@@ -269,9 +280,9 @@ first person pointing it at their own schema, and the cost is only module nestin
 
 ## Build order
 
-1. `proto-codec` runtime: varint reader, wire types, structural walker, error types.
+1. `protoview` runtime: varint reader, wire types, structural walker, error types.
 2. Codegen for scalars and nested messages on one hand-picked message — end to end
    before breadth.
 3. `repeated`, `map`, `oneof`, enums.
 4. `fixed_bytes` config and field-path matching.
-5. Point `codec-tests` at the full corpus. That is the acceptance gate.
+5. Point `protoview-tests` at the full corpus. That is the acceptance gate.

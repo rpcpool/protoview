@@ -211,15 +211,15 @@ fn render_parse(out: &mut String, pad: &str, message: &Message, layout: &IndexLa
         out,
         "{pad}/// Validates `buf` as a `{name}`, including every nested message, and indexes its\n\
          {pad}/// own fields. Nested messages are validated here but indexed lazily, when accessed,\n\
-         {pad}/// so no getter on the result, or on any lens reached from it, can fail.\n\
+         {pad}/// so no getter on the result, or on any view reached from it, can fail.\n\
          {pad}///\n\
          {pad}/// # Errors\n\
          {pad}///\n\
-         {pad}/// Any [`proto_codec::DecodeError`] found anywhere in the message tree."
+         {pad}/// Any [`protoview::DecodeError`] found anywhere in the message tree."
     );
     let _ = writeln!(
         out,
-        "{pad}pub fn parse(buf: B) -> Result<Self, proto_codec::DecodeError> {{"
+        "{pad}pub fn parse(buf: B) -> Result<Self, protoview::DecodeError> {{"
     );
     let _ = writeln!(
         out,
@@ -232,7 +232,7 @@ fn render_parse(out: &mut String, pad: &str, message: &Message, layout: &IndexLa
         out,
         "{pad}/// Validates `buf` as a `{name}` nested at `depth`, without keeping the index.\n\
          {pad}#[allow(dead_code)]\n\
-         {pad}pub(crate) fn validate(buf: &[u8], depth: u32) -> Result<(), proto_codec::DecodeError> {{\n\
+         {pad}pub(crate) fn validate(buf: &[u8], depth: u32) -> Result<(), protoview::DecodeError> {{\n\
          {pad}    Self::walk(buf, Some(depth)).map(|_| ())\n\
          {pad}}}"
     );
@@ -252,7 +252,7 @@ fn render_parse(out: &mut String, pad: &str, message: &Message, layout: &IndexLa
         "{pad}/// Walks `buf`, indexing its fields and, when `depth` is set, validating them and\n\
          {pad}/// every nested message at that depth.\n\
          {pad}#[allow(clippy::single_match)]\n\
-         {pad}fn walk(buf: &[u8], depth: Option<u32>) -> Result<[u32; {slot_count}], proto_codec::DecodeError> {{"
+         {pad}fn walk(buf: &[u8], depth: Option<u32>) -> Result<[u32; {slot_count}], protoview::DecodeError> {{"
     );
     let index_mut = if !has_indexed_fields(message) {
         let _ = writeln!(out, "{pad}    let _ = depth;");
@@ -263,7 +263,7 @@ fn render_parse(out: &mut String, pad: &str, message: &Message, layout: &IndexLa
     let _ = writeln!(out, "{pad}    let {index_mut}index = [0u32; {slot_count}];");
     let _ = writeln!(
         out,
-        "{pad}    let mut scanner = proto_codec::Scanner::new(buf)?;"
+        "{pad}    let mut scanner = protoview::Scanner::new(buf)?;"
     );
     if !has_indexed_fields(message) {
         // Nothing to index, but the walk still validates the message's structure.
@@ -317,6 +317,21 @@ fn render_parse(out: &mut String, pad: &str, message: &Message, layout: &IndexLa
     let _ = writeln!(out, "{pad}            _ => {{}}");
     let _ = writeln!(out, "{pad}        }}");
     let _ = writeln!(out, "{pad}    }}");
+    for (field, &slot) in message.fields.iter().zip(&layout.field_slots) {
+        // An absent plain field is proto3's empty default, which is not N bytes.
+        if let FieldKind::Scalar(Scalar::FixedBytes(len)) = field.kind
+            && !field.optional
+            && !field.repeated
+        {
+            let number = field.number;
+            let _ = writeln!(out, "{pad}    if depth.is_some() && index[{slot}] == 0 {{");
+            let _ = writeln!(
+                out,
+                "{pad}        return Err(protoview::DecodeError::FixedBytesLenMismatch {{ field: {number}, expected: {len}, actual: 0 }});"
+            );
+            let _ = writeln!(out, "{pad}    }}");
+        }
+    }
     let _ = writeln!(out, "{pad}    Ok(index)");
     let _ = writeln!(out, "{pad}}}");
 }
@@ -326,13 +341,13 @@ fn render_parse(out: &mut String, pad: &str, message: &Message, layout: &IndexLa
 /// message itself.
 fn render_field_validation(out: &mut String, pad: &str, module: &[String], field: &Field) {
     let expect = |wire_type: &str| {
-        format!("proto_codec::wire::expect_wire_type(&field, proto_codec::WireType::{wire_type})?;")
+        format!("protoview::wire::expect_wire_type(&field, protoview::WireType::{wire_type})?;")
     };
     let numeric = |scalar: Scalar| {
         let (_, width, _) = scalar_element(scalar);
         if field.repeated {
             format!(
-                "proto_codec::repeated::validate_numeric(buf, &field, proto_codec::repeated::Width::{width})?;"
+                "protoview::repeated::validate_numeric(buf, &field, protoview::repeated::Width::{width})?;"
             )
         } else {
             // `Width` variants share their names with the matching `WireType`.
@@ -340,6 +355,14 @@ fn render_field_validation(out: &mut String, pad: &str, module: &[String], field
         }
     };
     let nested = match &field.kind {
+        FieldKind::Scalar(Scalar::FixedBytes(len)) => {
+            let _ = writeln!(
+                out,
+                "{pad}if depth.is_some() {{ {} protoview::wire::expect_fixed_len(buf, &field, {len})?; }}",
+                expect("LengthDelimited")
+            );
+            return;
+        }
         FieldKind::Scalar(Scalar::String | Scalar::Bytes) => {
             let _ = writeln!(
                 out,
@@ -368,11 +391,11 @@ fn render_field_validation(out: &mut String, pad: &str, module: &[String], field
     let _ = writeln!(out, "{pad}    {}", expect("LengthDelimited"));
     let _ = writeln!(
         out,
-        "{pad}    let bytes = proto_codec::wire::read_length_delimited(buf, field.payload as usize)?;"
+        "{pad}    let bytes = protoview::wire::read_length_delimited(buf, field.payload as usize)?;"
     );
     let _ = writeln!(
         out,
-        "{pad}    {rust_path}::<&[u8]>::validate(bytes, proto_codec::wire::descend(depth)?)?;"
+        "{pad}    {rust_path}::<&[u8]>::validate(bytes, protoview::wire::descend(depth)?)?;"
     );
     let _ = writeln!(out, "{pad}}}");
 }
@@ -471,12 +494,12 @@ fn render_bytes_getter(
     let (absent, read) = if optional {
         (
             "None",
-            "proto_codec::wire::read_length_delimited(self.buf.as_ref(), offset as usize).ok()",
+            "protoview::wire::read_length_delimited(self.buf.as_ref(), offset as usize).ok()",
         )
     } else {
         (
             "&[]",
-            "proto_codec::wire::read_length_delimited(self.buf.as_ref(), offset as usize).unwrap_or(&[])",
+            "protoview::wire::read_length_delimited(self.buf.as_ref(), offset as usize).unwrap_or(&[])",
         )
     };
     let _ = writeln!(out, "{pad}pub fn {fn_name}(&self) -> {ret} {{");
@@ -498,14 +521,14 @@ fn render_repeated_getter(
 ) {
     let name = field_fn_name(&field.name);
     let records = format!(
-        "proto_codec::repeated::Records::new(self.buf.as_ref(), self.index[{slot}], self.index[{end}], {number})",
+        "protoview::repeated::Records::new(self.buf.as_ref(), self.index[{slot}], self.index[{end}], {number})",
         end = slot + 1,
         number = field.number
     );
     let length_delimited = format!(
         "{records}\n\
-         {pad}        .filter(|field| field.wire_type == proto_codec::WireType::LengthDelimited)\n\
-         {pad}        .filter_map(|field| proto_codec::wire::read_length_delimited(self.buf.as_ref(), field.payload as usize).ok())"
+         {pad}        .filter(|field| field.wire_type == protoview::WireType::LengthDelimited)\n\
+         {pad}        .filter_map(|field| protoview::wire::read_length_delimited(self.buf.as_ref(), field.payload as usize).ok())"
     );
 
     match &field.kind {
@@ -534,6 +557,22 @@ fn render_repeated_getter(
             let _ = writeln!(out, "{pad}    {length_delimited}");
             let _ = writeln!(out, "{pad}}}");
         }
+        FieldKind::Scalar(Scalar::FixedBytes(len)) => {
+            let _ = writeln!(
+                out,
+                "{pad}pub fn {name}(&self) -> impl Iterator<Item = [u8; {len}]> + '_ {{"
+            );
+            let _ = writeln!(out, "{pad}    {records}");
+            let _ = writeln!(
+                out,
+                "{pad}        .filter(|field| field.wire_type == protoview::WireType::LengthDelimited)"
+            );
+            let _ = writeln!(
+                out,
+                "{pad}        .filter_map(|field| protoview::wire::read_fixed_bytes::<{len}>(self.buf.as_ref(), field.payload as usize))"
+            );
+            let _ = writeln!(out, "{pad}}}");
+        }
         FieldKind::Scalar(scalar) => {
             let (rust_type, width, convert) = scalar_element(*scalar);
             let _ = writeln!(
@@ -542,7 +581,7 @@ fn render_repeated_getter(
             );
             let _ = writeln!(
                 out,
-                "{pad}    proto_codec::repeated::Scalars::new(self.buf.as_ref(), {records}, proto_codec::repeated::Width::{width})"
+                "{pad}    protoview::repeated::Scalars::new(self.buf.as_ref(), {records}, protoview::repeated::Width::{width})"
             );
             if let Some(convert) = convert {
                 let _ = writeln!(out, "{pad}        .map({convert})");
@@ -557,7 +596,7 @@ fn render_repeated_getter(
             );
             let _ = writeln!(
                 out,
-                "{pad}    proto_codec::repeated::Scalars::new(self.buf.as_ref(), {records}, proto_codec::repeated::Width::Varint)"
+                "{pad}    protoview::repeated::Scalars::new(self.buf.as_ref(), {records}, protoview::repeated::Width::Varint)"
             );
             let _ = writeln!(
                 out,
@@ -610,15 +649,15 @@ fn render_map_getter(
     let _ = writeln!(out, "{pad}    let buf = self.buf.as_ref();");
     let _ = writeln!(
         out,
-        "{pad}    proto_codec::repeated::Records::new(buf, self.index[{start}], self.index[{end}], {number})"
+        "{pad}    protoview::repeated::Records::new(buf, self.index[{start}], self.index[{end}], {number})"
     );
     let _ = writeln!(
         out,
-        "{pad}        .filter(|field| field.wire_type == proto_codec::WireType::LengthDelimited)"
+        "{pad}        .filter(|field| field.wire_type == protoview::WireType::LengthDelimited)"
     );
     let _ = writeln!(
         out,
-        "{pad}        .filter_map(move |field| proto_codec::wire::read_length_delimited(buf, field.payload as usize).ok())"
+        "{pad}        .filter_map(move |field| protoview::wire::read_length_delimited(buf, field.payload as usize).ok())"
     );
     let _ = writeln!(out, "{pad}        .map(|entry| {{");
     let _ = writeln!(
@@ -628,7 +667,7 @@ fn render_map_getter(
     );
     let _ = writeln!(
         out,
-        "{pad}            let (key, value) = proto_codec::map::entry_offsets(entry);"
+        "{pad}            let (key, value) = protoview::map::entry_offsets(entry);"
     );
     let _ = writeln!(
         out,
@@ -841,6 +880,7 @@ fn value_type(kind: &FieldKind, from: &[String], lifetime: &str) -> String {
             format!("Result<&{lifetime}str, core::str::Utf8Error>")
         }
         FieldKind::Scalar(Scalar::Bytes) => format!("&{lifetime}[u8]"),
+        FieldKind::Scalar(Scalar::FixedBytes(len)) => format!("[u8; {len}]"),
         FieldKind::Scalar(scalar) => scalar_element(*scalar).0.to_string(),
         FieldKind::Enum(target) => relative_path(from, target),
         FieldKind::Message(target) => format!("{}<&{lifetime}[u8]>", relative_path(from, target)),
@@ -853,10 +893,14 @@ fn value_type(kind: &FieldKind, from: &[String], lifetime: &str) -> String {
 /// happen on validated input — except deliberately, by passing an empty `buf`.
 fn value_expr(kind: &FieldKind, from: &[String], buf: &str, offset: &str) -> String {
     let length_delimited =
-        format!("proto_codec::wire::read_length_delimited({buf}, {offset}).unwrap_or(&[])");
+        format!("protoview::wire::read_length_delimited({buf}, {offset}).unwrap_or(&[])");
     match kind {
         FieldKind::Scalar(Scalar::String) => format!("core::str::from_utf8({length_delimited})"),
         FieldKind::Scalar(Scalar::Bytes) => length_delimited,
+        // `parse` checked the length, so the zero fallback is unreachable.
+        FieldKind::Scalar(Scalar::FixedBytes(len)) => format!(
+            "protoview::wire::read_fixed_bytes::<{len}>({buf}, {offset}).unwrap_or([0; {len}])"
+        ),
         FieldKind::Scalar(scalar) => scalar_read(*scalar, buf, offset),
         FieldKind::Enum(target) => format!(
             "{}::from_i32({})",
@@ -878,6 +922,8 @@ fn value_default(kind: &FieldKind, from: &[String]) -> String {
     match kind {
         FieldKind::Scalar(Scalar::Bool) => "false".to_string(),
         FieldKind::Scalar(Scalar::Float | Scalar::Double) => "0.0".to_string(),
+        // Unreachable after `parse`, which rejects an absent fixed-length field.
+        FieldKind::Scalar(Scalar::FixedBytes(len)) => format!("[0; {len}]"),
         FieldKind::Scalar(_) => "0".to_string(),
         FieldKind::Enum(target) => format!("{}::from_i32(0)", relative_path(from, target)),
         FieldKind::Message(_) | FieldKind::Map(_) => unreachable!("no implicit default"),
@@ -895,22 +941,20 @@ fn scalar_element(scalar: Scalar) -> (&'static str, &'static str, Option<&'stati
         Scalar::Sint32 => (
             "i32",
             "Varint",
-            Some("|v| proto_codec::varint::zigzag_decode32(v as u32)"),
+            Some("|v| protoview::varint::zigzag_decode32(v as u32)"),
         ),
         Scalar::Int64 => ("i64", "Varint", Some("|v| v as i64")),
         Scalar::Uint64 => ("u64", "Varint", None),
-        Scalar::Sint64 => (
-            "i64",
-            "Varint",
-            Some("proto_codec::varint::zigzag_decode64"),
-        ),
+        Scalar::Sint64 => ("i64", "Varint", Some("protoview::varint::zigzag_decode64")),
         Scalar::Fixed32 => ("u32", "Fixed32", Some("|v| v as u32")),
         Scalar::Sfixed32 => ("i32", "Fixed32", Some("|v| v as u32 as i32")),
         Scalar::Float => ("f32", "Fixed32", Some("|v| f32::from_bits(v as u32)")),
         Scalar::Fixed64 => ("u64", "Fixed64", None),
         Scalar::Sfixed64 => ("i64", "Fixed64", Some("|v| v as i64")),
         Scalar::Double => ("f64", "Fixed64", Some("f64::from_bits")),
-        Scalar::String | Scalar::Bytes => unreachable!("length-delimited, not numeric"),
+        Scalar::String | Scalar::Bytes | Scalar::FixedBytes(_) => {
+            unreachable!("length-delimited, not numeric")
+        }
     }
 }
 
@@ -919,49 +963,45 @@ fn scalar_element(scalar: Scalar) -> (&'static str, &'static str, Option<&'stati
 fn scalar_read(scalar: Scalar, buf: &str, offset: &str) -> String {
     match scalar {
         Scalar::Bool => format!(
-            "proto_codec::varint::read_varint32({buf}, {offset}).map(|(v, _)| v != 0).unwrap_or(false)"
+            "protoview::varint::read_varint32({buf}, {offset}).map(|(v, _)| v != 0).unwrap_or(false)"
         ),
         Scalar::Int32 => format!(
-            "proto_codec::varint::read_varint32({buf}, {offset}).map(|(v, _)| v as i32).unwrap_or(0)"
+            "protoview::varint::read_varint32({buf}, {offset}).map(|(v, _)| v as i32).unwrap_or(0)"
         ),
         Scalar::Uint32 => {
             format!(
-                "proto_codec::varint::read_varint32({buf}, {offset}).map(|(v, _)| v).unwrap_or(0)"
+                "protoview::varint::read_varint32({buf}, {offset}).map(|(v, _)| v).unwrap_or(0)"
             )
         }
         Scalar::Sint32 => format!(
-            "proto_codec::varint::read_varint32({buf}, {offset}).map(|(v, _)| proto_codec::varint::zigzag_decode32(v)).unwrap_or(0)"
+            "protoview::varint::read_varint32({buf}, {offset}).map(|(v, _)| protoview::varint::zigzag_decode32(v)).unwrap_or(0)"
         ),
         Scalar::Int64 => format!(
-            "proto_codec::varint::read_varint({buf}, {offset}).map(|(v, _)| v as i64).unwrap_or(0)"
+            "protoview::varint::read_varint({buf}, {offset}).map(|(v, _)| v as i64).unwrap_or(0)"
         ),
         Scalar::Uint64 => {
-            format!(
-                "proto_codec::varint::read_varint({buf}, {offset}).map(|(v, _)| v).unwrap_or(0)"
-            )
+            format!("protoview::varint::read_varint({buf}, {offset}).map(|(v, _)| v).unwrap_or(0)")
         }
         Scalar::Sint64 => format!(
-            "proto_codec::varint::read_varint({buf}, {offset}).map(|(v, _)| proto_codec::varint::zigzag_decode64(v)).unwrap_or(0)"
+            "protoview::varint::read_varint({buf}, {offset}).map(|(v, _)| protoview::varint::zigzag_decode64(v)).unwrap_or(0)"
         ),
-        Scalar::Fixed32 => format!("proto_codec::wire::read_fixed32({buf}, {offset}).unwrap_or(0)"),
+        Scalar::Fixed32 => format!("protoview::wire::read_fixed32({buf}, {offset}).unwrap_or(0)"),
         Scalar::Sfixed32 => {
-            format!(
-                "proto_codec::wire::read_fixed32({buf}, {offset}).map(|v| v as i32).unwrap_or(0)"
-            )
+            format!("protoview::wire::read_fixed32({buf}, {offset}).map(|v| v as i32).unwrap_or(0)")
         }
         Scalar::Float => format!(
-            "proto_codec::wire::read_fixed32({buf}, {offset}).map(f32::from_bits).unwrap_or(0.0)"
+            "protoview::wire::read_fixed32({buf}, {offset}).map(f32::from_bits).unwrap_or(0.0)"
         ),
-        Scalar::Fixed64 => format!("proto_codec::wire::read_fixed64({buf}, {offset}).unwrap_or(0)"),
+        Scalar::Fixed64 => format!("protoview::wire::read_fixed64({buf}, {offset}).unwrap_or(0)"),
         Scalar::Sfixed64 => {
-            format!(
-                "proto_codec::wire::read_fixed64({buf}, {offset}).map(|v| v as i64).unwrap_or(0)"
-            )
+            format!("protoview::wire::read_fixed64({buf}, {offset}).map(|v| v as i64).unwrap_or(0)")
         }
         Scalar::Double => format!(
-            "proto_codec::wire::read_fixed64({buf}, {offset}).map(f64::from_bits).unwrap_or(0.0)"
+            "protoview::wire::read_fixed64({buf}, {offset}).map(f64::from_bits).unwrap_or(0.0)"
         ),
-        Scalar::String | Scalar::Bytes => unreachable!("length-delimited, not numeric"),
+        Scalar::String | Scalar::Bytes | Scalar::FixedBytes(_) => {
+            unreachable!("length-delimited, not numeric")
+        }
     }
 }
 
